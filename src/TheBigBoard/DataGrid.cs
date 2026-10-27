@@ -274,6 +274,55 @@ public static class DataGrid
         }
     }
 
+    // Tinted background block behind a column group (header/group rows).
+    // Same geometry as AddSpanCell so the color sits exactly under the text.
+    public static void AddSpanBg(GameObject parent, string goName,
+        int first, int count, float[] widths, float padR, float gap, Color color)
+    {
+        var go = new GameObject(goName);
+        go.transform.SetParent(parent.transform, false);
+        var img = go.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;
+        var r = Rect(go);
+        float right = padR;
+        for (int j = first + count; j < widths.Length; j++) right += widths[j] + gap;
+        float width = 0f;
+        for (int j = first; j < first + count; j++) width += widths[j];
+        width += gap * (count - 1);
+        r.anchorMin = new Vector2(1f, 0f);
+        r.anchorMax = new Vector2(1f, 1f);
+        r.offsetMin = new Vector2(-(right + width), 0f);
+        r.offsetMax = new Vector2(-right, 0f);
+        TagCell(go, ColKind.Span, -1, first, count, widths, 0f, padR, gap);
+    }
+
+    // 3px vertical divider at the LEFT edge of a fixed column, full row
+    // height. Marks group boundaries; follows resizes via ColTag.
+    public static void AddDivider(GameObject parent, string goName,
+        float[] widths, int firstCol, float padR, float gap, Color color)
+    {
+        var go = new GameObject(goName);
+        go.transform.SetParent(parent.transform, false);
+        var img = go.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;
+        var r = Rect(go);
+        float dist = DividerFromRight(widths, firstCol, padR, gap);
+        r.anchorMin = new Vector2(1f, 0f);
+        r.anchorMax = new Vector2(1f, 1f);
+        r.offsetMin = new Vector2(-(dist + 1.5f), 0f);
+        r.offsetMax = new Vector2(-(dist - 1.5f), 0f);
+        TagCell(go, ColKind.Divider, firstCol, 0, 0, widths, 0f, padR, gap);
+    }
+
+    public static float DividerFromRight(float[] widths, int col, float padR, float gap)
+    {
+        float fromRight = padR;
+        for (int j = col + 1; j < widths.Length; j++) fromRight += widths[j] + gap;
+        return fromRight + widths[col];
+    }
+
     public static void AddSpanCell(GameObject parent, string goName, string value,
         int first, int count, float[] widths, float padR, float gap, int fontSize, Color color)
     {
@@ -540,7 +589,7 @@ public static class DataGrid
     // fixed and the NAME column absorbs the difference. Double-click restores
     // the default width. Widths persist per table in PlayerPrefs.
 
-    public enum ColKind { Name, Fixed, Span, HeadButton, Handle }
+    public enum ColKind { Name, Fixed, Span, HeadButton, Handle, Divider }
 
     public struct GroupDef
     {
@@ -831,6 +880,17 @@ public static class DataGrid
                     break;
                 case ColKind.Handle:
                     PositionHandle(child.gameObject, w, tag.col, tag.padR, tag.gap);
+                    break;
+                case ColKind.Divider:
+                    {
+                        int f = tag.col;
+                        if (f < 0 || f >= w.Length) break;
+                        float dist = DividerFromRight(w, f, tag.padR, tag.gap);
+                        r.anchorMin = new Vector2(1f, 0f);
+                        r.anchorMax = new Vector2(1f, 1f);
+                        r.offsetMin = new Vector2(-(dist + 1.5f), 0f);
+                        r.offsetMax = new Vector2(-(dist - 1.5f), 0f);
+                    }
                     break;
             }
         }

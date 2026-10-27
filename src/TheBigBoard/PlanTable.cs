@@ -49,6 +49,11 @@ public sealed class PlanTable : TablePanel<FactoryPanel.ProductRow>
         new DataGrid.GroupDef("LAST WEEK", 10, 4),
     };
 
+    protected override int[] GroupDividerCols()
+    {
+        return new int[] { 2, 6, 10 };
+    }
+
     public PlanTable()
         : base("factoryPlan", HeadNames, DefaultWidths, ColAlign, 40f, 40f, 12f,
             26, GroupDefs, -1, true)

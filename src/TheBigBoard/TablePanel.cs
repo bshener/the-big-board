@@ -75,11 +75,29 @@ public abstract class TablePanel<TRow>
                 HeaderFontSize, DataGrid.HeaderInk,
                 TMPro.HorizontalAlignmentOptions.Left);
             for (int g = 0; g < Groups.Length; g++)
+                DataGrid.AddSpanBg(GroupRow, "GroupBg" + g, Groups[g].first, Groups[g].count,
+                    Widths, PadR, Gap, GroupTint(g));
+            for (int g = 0; g < Groups.Length; g++)
+            {
                 DataGrid.AddSpanCell(GroupRow, "Group" + g, Groups[g].title,
                     Groups[g].first, Groups[g].count, Widths, PadR, Gap,
                     HeaderFontSize, DataGrid.HeaderInk);
+                var gt = GroupRow.transform.Find("Group" + g);
+                if (gt != null)
+                {
+                    var gtxt = gt.GetComponent<TMPro.TextMeshProUGUI>();
+                    if (gtxt != null) gtxt.fontStyle = TMPro.FontStyles.Bold;
+                }
+            }
+            AddGroupDividers(GroupRow, new Color(0.30f, 0.33f, 0.37f, 1f));
         }
         HeadRow = DataGrid.AddHeaderRow(parent, name, headBottom, headTop, rightInset);
+        if (Groups != null && Groups.Length > 0)
+        {
+            for (int g = 0; g < Groups.Length; g++)
+                DataGrid.AddSpanBg(HeadRow, "HeadBg" + g, Groups[g].first, Groups[g].count,
+                    Widths, PadR, Gap, GroupTint(g));
+        }
         HeadTexts = new TMPro.TextMeshProUGUI[Headers.Length];
         HeadTexts[0] = DataGrid.AddNameCell(HeadRow, "HeadName", Headers[0],
             Widths, PadL, PadR, Gap, HeaderFontSize, DataGrid.HeaderInk,
@@ -94,7 +112,38 @@ public abstract class TablePanel<TRow>
                 TMPro.HorizontalAlignmentOptions.Center);
             DataGrid.AddHeadButton(HeadRow, i + 1, Widths, PadL, PadR, Gap, SetSort);
         }
+        AddGroupDividers(HeadRow, new Color(0.30f, 0.33f, 0.37f, 1f));
         UpdateHeadSort();
+    }
+
+    // Pale rotating tints so each column group reads as one block.
+    // Same tint on the group title and its sub-headers links them.
+    static Color GroupTint(int g)
+    {
+        switch (g % 3)
+        {
+            case 1: return new Color(0.93f, 0.90f, 0.82f, 1f);
+            case 2: return new Color(0.84f, 0.88f, 0.93f, 1f);
+            default: return new Color(0.78f, 0.86f, 0.87f, 1f);
+        }
+    }
+
+    // Vertical dividers at group boundaries. Tables opt in via
+    // GroupDividerCols (fixed-column indices = each group's first column).
+    protected virtual int[] GroupDividerCols()
+    {
+        return null;
+    }
+
+    protected void AddGroupDividers(GameObject rowGO, Color color)
+    {
+        var cols = GroupDividerCols();
+        if (cols == null || rowGO == null) return;
+        foreach (int f in cols)
+        {
+            if (f <= 0 || f >= Widths.Length) continue;
+            DataGrid.AddDivider(rowGO, "GrpDiv" + f, Widths, f, PadR, Gap, color);
+        }
     }
 
     public void BuildRows(GameObject parent,
@@ -219,13 +268,18 @@ public abstract class TablePanel<TRow>
                 TMPro.VerticalAlignmentOptions.Top);
             return;
         }
+        int totalBefore = RowsRoot.childCount;
         RenderTotalRow(Cached);
+        if (RowsRoot.childCount > totalBefore)
+            AddGroupDividers(RowsRoot.GetChild(RowsRoot.childCount - 1).gameObject,
+                new Color(0.60f, 0.63f, 0.67f, 1f));
         int stripe = 0;
         foreach (var r in Cached)
         {
             var rowGO = DataGrid.AddRowRoot(RowsRoot, "Row",
                 stripe % 2 == 0 ? DataGrid.RowBg : DataGrid.RowBgAlt);
             RenderRow(rowGO, r);
+            AddGroupDividers(rowGO, new Color(0.60f, 0.63f, 0.67f, 1f));
             if (RowClickable(r))
             {
                 var captured = r;
