@@ -30,10 +30,20 @@ public static class StockHistory
     const int MaxRows = 20000;
 
     static readonly Dictionary<string, long> _snaps = new Dictionary<string, long>();
+    static readonly HashSet<int> _days = new HashSet<int>();
     static int _lastDay = -1;
     static int _firstDay = -1;
     static bool _loaded;
     static bool _snapRunning;
+
+    /// <summary>Days with a completed start-of-day snapshot (missing pair =
+    /// true zero, not a gap). Distinct from FirstDay: a day counts only
+    /// after its sweep finishes, so aborted sweeps never read as zeros.
+    /// </summary>
+    public static bool HasDay(int day)
+    {
+        return _days.Contains(day);
+    }
 
     static string SKey(int day, string addr, string pkey)
     {

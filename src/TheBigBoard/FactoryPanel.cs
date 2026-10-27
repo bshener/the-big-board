@@ -108,6 +108,10 @@ public static class FactoryPanel
         public long stock; // upstream on-hand (own factories + warehouses, stores excluded)
         public long sellToday; // retail units sold today (orderHistory + live orders)
         public long sellWeek; // retail units sold in rolling 7 days (D-6..D)
+        public long prodToday; // manufactured in THIS factory today so far (ledger identity)
+        public bool prodTodayExact; // false = unattributable, render "..."
+        public long prodWeek; // manufactured in THIS factory in rolling 7 days (ledger identity)
+        public bool prodWeekExact; // false = unattributable, render "..."
     }
 
     public sealed class SupplyRow
@@ -632,7 +636,9 @@ public static class FactoryPanel
                     _context.Logger.Info("The Big Board factory plan [" + _data.name + "]: "
                         + p.productName + " lines=" + p.lines
                         + " planT=" + p.today + " planW=" + p.week
-                        + " stock=" + p.stock + " sellT=" + p.sellToday + " sellW=" + p.sellWeek);
+                        + " stock=" + p.stock + " sellT=" + p.sellToday + " sellW=" + p.sellWeek
+                        + " prodT=" + (p.prodTodayExact ? p.prodToday.ToString("N0") : "...")
+                        + " prodW=" + (p.prodWeekExact ? p.prodWeek.ToString("N0") : "..."));
                 }
             }
         }
@@ -891,6 +897,45 @@ public static class FactoryPanel
             }
             catch { }
         }
+        // PROD TODAY / PROD WEEK: manufactured in THIS factory (ledger
+        // identity). Exact only with ledger coverage and clean warehouse
+        // attribution (sole own producer, or no warehouse arrivals in the
+        // window). Components are logged for audit (hist vs wh overlap).
+        try
+        {
+            if (data.reg != null && today > 0)
+            {
+                int weekFrom = today - 6;
+                foreach (var kv in byPkey)
+                {
+                    bool sole = Manufactured.IsSoleProducer(data.reg, kv.Key);
+                    var mt = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, today, today, sole);
+                    kv.Value.prodToday = mt.Exact ? mt.Value : 0;
+                    kv.Value.prodTodayExact = mt.Exact;
+                    var mw = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, weekFrom, today, sole);
+                    kv.Value.prodWeek = mw.Exact ? mw.Value : 0;
+                    kv.Value.prodWeekExact = mw.Exact;
+                    if (_context != null)
+                        _context.Logger.Info("The Big Board factory made [" + data.name + "]: "
+                            + kv.Value.productName
+                            + " prodT=" + (mt.Exact ? mt.Value.ToString("N0") : "..." + mt.Basis)
+                            + "[S=" + mt.S1 + "-" + mt.S0 + " H=" + mt.Hist + " W=" + mt.Wh + " L=" + mt.LiveE + "]"
+                            + " prodW=" + (mw.Exact ? mw.Value.ToString("N0") : "..." + mw.Basis)
+                            + "[S=" + mw.S1 + "-" + mw.S0 + " H=" + mw.Hist + " W=" + mw.Wh + " L=" + mw.LiveE + "]");
+                }
+            }
+            else
+            {
+                foreach (var kv in byPkey)
+                {
+                    kv.Value.prodToday = 0;
+                    kv.Value.prodTodayExact = false;
+                    kv.Value.prodWeek = 0;
+                    kv.Value.prodWeekExact = false;
+                }
+            }
+        }
+        catch { }
     }
 
     static long PlanToday(FactoryWorkstationInstance ws, Recipe recipe)

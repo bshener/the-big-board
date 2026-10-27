@@ -2352,6 +2352,22 @@ public static class ModPanel
         // Selected store has no sales in this range: fall back to ALL.
         if (_bestStore != null && !storeSold.ContainsKey(_bestStore))
             _bestStore = null;
+        // PRODUCED basis: manufactured via the ledger identity where exact
+        // (ledger-covered, not imported/wholesaled/export-routed), else the
+        // shipped proxy from the hits. One batch call for all products.
+        int mfgFrom = _bestRange == 2 ? _bestDay - 6 : (_bestRange == 1 ? _bestDay - 1 : _bestDay);
+        int mfgTo = _bestRange == 1 ? _bestDay - 1 : _bestDay;
+        Dictionary<string, Manufactured.Result> mfg = null;
+        try
+        {
+            var mfgProducts = new List<KeyValuePair<string, string>>();
+            foreach (var kv in byProduct)
+                mfgProducts.Add(new KeyValuePair<string, string>(kv.Key, kv.Value.raw));
+            mfg = Manufactured.ForGlobalBatch(mfgProducts, mfgFrom, mfgTo, _bestDay, _bestStock);
+        }
+        catch { mfg = null; }
+        int mfgExact = 0;
+        int mfgFallback = 0;
         var rows = new List<BestSellersTable.BestRow>();
         foreach (var kv in byProduct)
         {
@@ -2366,7 +2382,21 @@ public static class ModPanel
                 if (!agg.perStoreCost.TryGetValue(_bestStore, out cost)) cost = 0;
             }
             // PRODUCED stays product-global: factories are not stores.
-            if (sold == 0 && agg.produced == 0) continue;
+            // Manufactured (ledger identity) wins over the shipped proxy.
+            long produced = agg.produced;
+            bool producedExact = false;
+            try
+            {
+                Manufactured.Result mr;
+                if (mfg != null && mfg.TryGetValue(kv.Key, out mr) && mr.Exact)
+                {
+                    produced = mr.Value;
+                    producedExact = true;
+                }
+            }
+            catch { }
+            if (sold == 0 && produced == 0) continue;
+            if (producedExact) mfgExact++; else mfgFallback++;
             string top = "-";
             long topAmt = 0;
             foreach (var sp in agg.perStore)
@@ -2381,7 +2411,7 @@ public static class ModPanel
                 pkey = kv.Key,
                 raw = agg.raw,
                 sold = sold,
-                produced = agg.produced,
+                produced = produced,
                 stock = stock,
                 revenue = revenue,
                 profit = revenue - cost,
@@ -2401,6 +2431,13 @@ public static class ModPanel
         _bestTable.ShowResults(rows, label);
         UpdateBestStoreBar(storeSold);
         BuildBestStoreTabs(storeSold);
+        try
+        {
+            if (_salesContext != null)
+                _salesContext.Logger.Info("The Big Board best sellers produced basis: "
+                    + mfgExact + " ledger-exact / " + mfgFallback + " shipped-proxy.");
+        }
+        catch { }
     }
 
     static void UpdateBestStoreBar(Dictionary<string, long> storeSold)
