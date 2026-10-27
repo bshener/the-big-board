@@ -49,6 +49,26 @@ public sealed class SupplyTable : TablePanel<FactoryPanel.SupplyRow>
         return c;
     }
 
+    protected override void RenderTotalRow(List<FactoryPanel.SupplyRow> rows)
+    {
+        long need = 0, fac = 0, inc = 0, sh = 0;
+        foreach (var s in rows)
+        {
+            need += s.needWk;
+            fac += s.inFactory;
+            inc += s.incoming;
+            sh += s.shortfall;
+        }
+        var rowGO = DataGrid.AddRowRoot(RowsRoot, "TotalRow", DataGrid.TotalBg);
+        NameCell(rowGO, "TotalName", "TOTAL (" + rows.Count + " ingredients)", DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalNeed", need.ToString("N0"), 0, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalFactory", fac.ToString("N0"), 1, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalIncoming", inc.ToString("N0"), 2, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalDays", "-", 3, DataGrid.InkGrey);
+        Fixed(rowGO, "TotalShortfall", sh.ToString("N0"), 4,
+            sh > 0 ? DataGrid.WarnRed : DataGrid.ProfitGreen);
+    }
+
     protected override void RenderRow(GameObject rowGO, FactoryPanel.SupplyRow s)
     {
         string days = s.days < 0 ? "--" : s.days.ToString("F1");

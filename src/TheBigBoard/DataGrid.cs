@@ -22,7 +22,7 @@ public static class DataGrid
     // ---------- shared palette (identical values in every panel) ----------
 
     public static readonly Color HeaderBg = new Color(0.93f, 0.94f, 0.95f, 1f);
-    public static readonly Color HeaderInk = new Color(0.35f, 0.38f, 0.42f, 1f);
+    public static readonly Color HeaderInk = new Color(0.16f, 0.18f, 0.22f, 1f);
     public static readonly Color RowBg = new Color(0.17f, 0.20f, 0.25f, 1f);
     public static readonly Color RowBgAlt = new Color(0.24f, 0.28f, 0.34f, 1f);
     public static readonly Color TotalBg = new Color(0.13f, 0.22f, 0.24f, 1f);

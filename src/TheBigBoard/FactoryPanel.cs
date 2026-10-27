@@ -53,14 +53,6 @@ public static class FactoryPanel
     static Image _supplyTabBg;
     static TMPro.TMP_Text _planTabLabel;
     static TMPro.TMP_Text _supplyTabLabel;
-    static TMPro.TMP_Text _cardLines;
-    static TMPro.TMP_Text _cardProducts;
-    static TMPro.TMP_Text _cardToday;
-    static TMPro.TMP_Text _cardWeek;
-    static TMPro.TMP_Text _cardIngredients;
-    static TMPro.TMP_Text _cardNeed;
-    static TMPro.TMP_Text _cardIncoming;
-    static TMPro.TMP_Text _cardShortfall;
     static GameObject _supplyProgGO;
     static RectTransform _supplyProgFill;
     static TMPro.TMP_Text _supplyProgLabel;
@@ -150,8 +142,13 @@ public static class FactoryPanel
         leftGO.transform.SetParent(page.transform, false);
         Anchor(leftGO, 0f, 0f, 0.30f, 1f, 0f, 0f, -24f, 0f);
 
+        var listHeadBgGO = new GameObject("FactoryListHeadBg");
+        listHeadBgGO.transform.SetParent(leftGO.transform, false);
+        Anchor(listHeadBgGO, 0f, 1f, 1f, 1f, 0f, -58f, 0f, 0f);
+        var listHeadBg = listHeadBgGO.AddComponent<Image>();
+        listHeadBg.color = new Color(0.08f, 0.10f, 0.13f, 0.78f);
         _listCountText = Text("FactoryListCount", "YOUR FACTORIES", 26,
-            TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, InkGrey);
+            TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, InkLight);
         _listCountText.transform.SetParent(leftGO.transform, false);
         Anchor(_listCountText.gameObject, 0f, 1f, 1f, 1f, 0f, -50f, 0f, 0f);
 
@@ -222,13 +219,18 @@ public static class FactoryPanel
         rightGO.transform.SetParent(page.transform, false);
         Anchor(rightGO, 0.30f, 0f, 1f, 1f, 24f, 0f, 0f, 0f);
 
+        var headBgGO = new GameObject("FactoryHeadBg");
+        headBgGO.transform.SetParent(rightGO.transform, false);
+        Anchor(headBgGO, 0f, 1f, 0.62f, 1f, 0f, -128f, 0f, 0f);
+        var headBg = headBgGO.AddComponent<Image>();
+        headBg.color = new Color(0.08f, 0.10f, 0.13f, 0.78f);
         _titleText = Text("FactoryTitle", "FACTORY", 44,
             TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, Color.white);
         _titleText.transform.SetParent(rightGO.transform, false);
         Anchor(_titleText.gameObject, 0f, 1f, 0.55f, 1f, 0f, -70f, 0f, 0f);
 
         _snapshotText = Text("FactorySnapshot", "", 26,
-            TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, InkGrey);
+            TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, InkLight);
         _snapshotText.transform.SetParent(rightGO.transform, false);
         Anchor(_snapshotText.gameObject, 0f, 1f, 0.55f, 1f, 0f, -120f, 0f, -70f);
 
@@ -277,52 +279,22 @@ public static class FactoryPanel
 
     static void BuildPlanView(GameObject view)
     {
-        var cardsGO = new GameObject("PlanCards");
-        cardsGO.transform.SetParent(view.transform, false);
-        Anchor(cardsGO, 0f, 1f, 1f, 1f, 0f, -150f, 0f, 0f);
-        var cardsLayout = cardsGO.AddComponent<HorizontalLayoutGroup>();
-        cardsLayout.spacing = 16f;
-        cardsLayout.childControlWidth = true;
-        cardsLayout.childControlHeight = true;
-        cardsLayout.childForceExpandWidth = true;
-        cardsLayout.childForceExpandHeight = true;
-
-        _cardLines = AddCard(cardsGO.transform, "PRODUCTION LINES");
-        _cardProducts = AddCard(cardsGO.transform, "PRODUCTS");
-        _cardToday = AddCard(cardsGO.transform, "PLAN TODAY");
-        _cardWeek = AddCard(cardsGO.transform, "PLAN / WEEK");
-
         _planTable = new PlanTable();
         _planTable.Init(_context);
-        _planTable.BuildHeader(view, "PlanHeader", 0f, 0f, -214f, -158f);
+        _planTable.BuildHeader(view, "PlanHeader", 0f, 0f, -56f, 0f);
         _planTable.BuildRows(view,
-            "RowsScroll", "Viewport", "Rows", "Scrollbar", -222f);
+            "RowsScroll", "Viewport", "Rows", "Scrollbar", -64f);
     }
 
     static void BuildSupplyView(GameObject view)
     {
-        var cardsGO = new GameObject("SupplyCards");
-        cardsGO.transform.SetParent(view.transform, false);
-        Anchor(cardsGO, 0f, 1f, 1f, 1f, 0f, -150f, 0f, 0f);
-        var cardsLayout = cardsGO.AddComponent<HorizontalLayoutGroup>();
-        cardsLayout.spacing = 16f;
-        cardsLayout.childControlWidth = true;
-        cardsLayout.childControlHeight = true;
-        cardsLayout.childForceExpandWidth = true;
-        cardsLayout.childForceExpandHeight = true;
-
-        _cardIngredients = AddCard(cardsGO.transform, "INGREDIENTS");
-        _cardNeed = AddCard(cardsGO.transform, "NEED / WEEK");
-        _cardIncoming = AddCard(cardsGO.transform, "INCOMING");
-        _cardShortfall = AddCard(cardsGO.transform, "SHORTFALL ITEMS");
-
         _supplyTable = new SupplyTable();
         _supplyTable.Init(_context);
-        _supplyTable.BuildHeader(view, "SupplyHeader", 0f, 0f, -214f, -158f);
+        _supplyTable.BuildHeader(view, "SupplyHeader", 0f, 0f, -56f, 0f);
 
         _supplyProgGO = new GameObject("SupplyProgress");
         _supplyProgGO.transform.SetParent(view.transform, false);
-        Anchor(_supplyProgGO, 0f, 1f, 1f, 1f, 40f, -252f, -40f, -220f);
+        Anchor(_supplyProgGO, 0f, 1f, 1f, 1f, 0f, -56f, 0f, 0f);
         var progBg = _supplyProgGO.AddComponent<Image>();
         progBg.color = new Color(0.10f, 0.12f, 0.15f, 1f);
         var fillGO = new GameObject("SupplyProgressFill");
@@ -341,24 +313,7 @@ public static class FactoryPanel
         _supplyProgGO.SetActive(false);
 
         _supplyTable.BuildRows(view,
-            "RowsScroll", "Viewport", "Rows", "Scrollbar", -260f);
-    }
-
-    static TMPro.TMP_Text AddCard(Transform parent, string title)
-    {
-        var card = new GameObject("Card" + title);
-        card.transform.SetParent(parent, false);
-        var bg = card.AddComponent<Image>();
-        bg.color = new Color(0.93f, 0.94f, 0.95f, 1f);
-        var t = Text("CardTitle", title, 24,
-            TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Top, CardTitle);
-        t.transform.SetParent(card.transform, false);
-        Anchor(t.gameObject, 0f, 1f, 1f, 1f, 24f, -64f, -24f, -16f);
-        var v = Text("CardValue", "-", 52,
-            TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Top, Color.black);
-        v.transform.SetParent(card.transform, false);
-        Anchor(v.gameObject, 0f, 1f, 1f, 1f, 24f, -142f, -24f, -60f);
-        return v;
+            "RowsScroll", "Viewport", "Rows", "Scrollbar", -64f);
     }
 
     // Table geometry, sorting and resize live in PlanTable / SupplyTable
@@ -619,7 +574,6 @@ public static class FactoryPanel
                 : "Select a factory.";
             _planTable.ShowInfo("No factory selected.");
             _supplyTable.ShowInfo("No factory selected.");
-            SetCardsEmpty();
             return;
         }
         if (_titleText != null) _titleText.text = _data.name;
@@ -629,24 +583,8 @@ public static class FactoryPanel
         RenderSupply();
     }
 
-    static void SetCardsEmpty()
-    {
-        if (_cardLines != null) _cardLines.text = "-";
-        if (_cardProducts != null) _cardProducts.text = "-";
-        if (_cardToday != null) _cardToday.text = "-";
-        if (_cardWeek != null) _cardWeek.text = "-";
-        if (_cardIngredients != null) _cardIngredients.text = "-";
-        if (_cardNeed != null) _cardNeed.text = "-";
-        if (_cardIncoming != null) _cardIncoming.text = "-";
-        if (_cardShortfall != null) _cardShortfall.text = "-";
-    }
-
     static void RenderPlan()
     {
-        if (_cardLines != null) _cardLines.text = _data.lines.Count.ToString("N0");
-        if (_cardProducts != null) _cardProducts.text = _data.products.Count.ToString("N0");
-        if (_cardToday != null) _cardToday.text = _data.totalToday.ToString("N0");
-        if (_cardWeek != null) _cardWeek.text = _data.totalWeek.ToString("N0");
         _planTable.SetRows(_data.products);
         // Per-product audit line: plan vs upstream stock vs retail sales.
         // Lets plan/actual gaps (e.g. popcorn) be diagnosed from Player.log
@@ -676,27 +614,11 @@ public static class FactoryPanel
         if (_data == null) return;
         if (!_data.supplyReady)
         {
-            if (_cardIngredients != null) _cardIngredients.text = _data.materialNeed.Count.ToString("N0");
-            if (_cardNeed != null) _cardNeed.text = "...";
-            if (_cardIncoming != null) _cardIncoming.text = "...";
-            if (_cardShortfall != null)
-            {
-                _cardShortfall.text = "...";
-                _cardShortfall.color = Color.black;
-            }
             if (_supplyProgGO != null) _supplyProgGO.SetActive(true);
             _supplyTable.ShowInfo("Counting warehouses...");
             return;
         }
         if (_supplyProgGO != null) _supplyProgGO.SetActive(false);
-        if (_cardIngredients != null) _cardIngredients.text = _data.supply.Count.ToString("N0");
-        if (_cardNeed != null) _cardNeed.text = _data.totalNeed.ToString("N0");
-        if (_cardIncoming != null) _cardIncoming.text = _data.totalIncoming.ToString("N0");
-        if (_cardShortfall != null)
-        {
-            _cardShortfall.text = _data.shortfallItems.ToString("N0");
-            _cardShortfall.color = _data.shortfallItems > 0 ? WarnRed : ProfitGreen;
-        }
         _supplyTable.SetRows(_data.supply);
         // Shortfall audit lines: only items actually short, so the log stays
         // small while material starvation is diagnosable from Player.log.
