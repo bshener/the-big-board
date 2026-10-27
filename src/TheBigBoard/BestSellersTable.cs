@@ -18,6 +18,8 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
     public sealed class BestRow
     {
         public string name;
+        public string pkey; // lowercase product id (exact-key handoff)
+        public string raw; // raw itemName for the handoff
         public long sold;
         public long produced;
         public long stock;
@@ -130,6 +132,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
         DataGrid.AddFixedCell(rowGO, "BestRowTopStore", r.topStore ?? "-", Widths, 5,
             PadR, Gap, 28, DataGrid.InkLight,
             TMPro.HorizontalAlignmentOptions.Left);
+        DataGrid.AddRowRightClick(rowGO, () => ModPanel.OpenBestRowMenu(r, rowGO));
     }
 
     void AddCells(GameObject rowGO, string name, long sold, long produced, long stock,

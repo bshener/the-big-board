@@ -651,10 +651,18 @@ public static class ModPanel
         PhoneButtonInstaller.RunNextFrame(() => DoStockSearch(context, query, raw));
     }
 
+    // Product matcher for the STOCK tab. Text mode (search box) matches by id
+    // or display-name substring; exact mode (BEST SELLERS context menu)
+    // matches the product id precisely. Set _stockExactKey around the search.
+    static string _stockExactKey; // null = text search mode
+
     static bool StockIdMatchesQuery(string itemId, string query)
     {
-        if (string.IsNullOrEmpty(itemId) || string.IsNullOrEmpty(query)) return false;
-        if (itemId.ToLowerInvariant().Contains(query)) return true;
+        if (string.IsNullOrEmpty(itemId)) return false;
+        string pkey = itemId.ToLowerInvariant();
+        if (_stockExactKey != null) return pkey == _stockExactKey;
+        if (string.IsNullOrEmpty(query)) return false;
+        if (pkey.Contains(query)) return true;
         try
         {
             string disp = GetProductDisplayName(itemId);
@@ -749,13 +757,7 @@ public static class ModPanel
             foreach (var id in stockedIds.Keys)
             {
                 string key = id.ToLowerInvariant();
-                if (key.Contains(query))
-                {
-                    candidates[key] = id;
-                    continue;
-                }
-                string disp = GetProductDisplayName(id);
-                if (disp != null && disp.ToLowerInvariant().Contains(query))
+                if (StockIdMatchesQuery(id, query))
                     candidates[key] = id;
             }
             // Raw materials: factory recipe ingredients + importer products +
@@ -1373,6 +1375,7 @@ public static class ModPanel
 
     static void SelectTab(int index)
     {
+        CloseBestMenu();
         for (int i = 0; i < 6; i++)
         {
             if (_tabLabels[i] != null) _tabLabels[i].color = i == index ? TabActive : TabIdle;
@@ -1800,6 +1803,7 @@ public static class ModPanel
     {
         if (index < 0 || index > 1) return;
         _salesSubTab = index;
+        CloseBestMenu();
         RefreshSalesSubTabStyles();
         if (_salesSearchView != null) _salesSearchView.SetActive(index == 1);
         if (_salesBestView != null) _salesBestView.SetActive(index == 0);
@@ -1856,6 +1860,14 @@ public static class ModPanel
         refreshSize.flexibleWidth = 1f;
         refreshSize.minHeight = 60f;
         refreshBtn.onClick.AddListener(() => DoBestScan(_salesContext));
+        var hintLabel = Text("BestHintLabel", "Right-click a product for actions", 22,
+            TMPro.HorizontalAlignmentOptions.Center,
+            TMPro.VerticalAlignmentOptions.Middle, InkGrey);
+        hintLabel.transform.SetParent(_bestPillBar.transform, false);
+        Stretch(hintLabel.gameObject);
+        var hintSize = hintLabel.gameObject.AddComponent<LayoutElement>();
+        hintSize.preferredWidth = 480f;
+        hintSize.flexibleWidth = 0f;
 
         // Store filter strip (same bordered-card pattern as the search view).
         var filterCardGO = new GameObject("BestStoreFilterCard");
@@ -1989,6 +2001,56 @@ public static class ModPanel
         catch { unit = 0; }
         _bestFallbackCost[pkey] = unit > 0 ? unit : -1f;
         return unit > 0 ? unit : 0;
+    }
+
+    // ============ BEST SELLERS row context menu ============
+    // Right-click a product row for actions. The menu is a generic
+    // DataGrid.ShowContextMenu list: today's only entry inspects the product
+    // in the STOCK tab; future entries (SELL, detail, ...) plug in as new
+    // list entries here.
+    static GameObject _bestMenu;
+
+    public static void OpenBestRowMenu(BestSellersTable.BestRow row, GameObject rowGO)
+    {
+        if (row == null || rowGO == null || _salesBestView == null) return;
+        CloseBestMenu();
+        var items = new List<KeyValuePair<string, Action>>();
+        string pkey = row.pkey;
+        string raw = row.raw;
+        items.Add(new KeyValuePair<string, Action>("Inspect in STOCK",
+            () => InspectBestInStock(pkey, raw)));
+        _bestMenu = DataGrid.ShowContextMenu(_salesBestView.transform, rowGO,
+            row.name, items, () => { _bestMenu = null; });
+        if (_salesContext != null)
+            _salesContext.Logger.Info("The Big Board best sellers menu: '" + row.name + "'.");
+    }
+
+    static void CloseBestMenu()
+    {
+        if (_bestMenu == null) return;
+        try { UnityEngine.Object.Destroy(_bestMenu); } catch { }
+        _bestMenu = null;
+    }
+
+    // Exact-key handoff: the STOCK tab searches the single product id (no
+    // text matching), so the inspection always lands on the right product.
+    static void InspectBestInStock(string pkey, string rawItemId)
+    {
+        var context = _salesContext ?? _lastContext;
+        if (context == null || _stockTable == null || string.IsNullOrEmpty(pkey)) return;
+        string label = GetProductDisplayName(rawItemId);
+        _stockExactKey = pkey;
+        if (_stockQueryText != null) _stockQueryText.text = label;
+        if (_stockMatchText != null) { _stockMatchText.gameObject.SetActive(true); _stockMatchText.text = "Searching '" + label + "'..."; }
+        _stockTable.ShowInfo("Searching '" + label + "'...", 32);
+        CloseBestMenu();
+        SelectTab(5);
+        context.Logger.Info("The Big Board best sellers: inspecting '" + label + "' in STOCK.");
+        PhoneButtonInstaller.RunNextFrame(() =>
+        {
+            try { DoStockSearch(context, "", label); }
+            finally { _stockExactKey = null; }
+        });
     }
 
     static void DoBestScan(ModContext context)
@@ -2243,6 +2305,7 @@ public static class ModPanel
 
     static void RebuildBestAggregates()
     {
+        CloseBestMenu();
         var byProduct = new Dictionary<string, BestAgg>();
         var storeSold = new Dictionary<string, long>();
         if (_bestHits != null)
@@ -2309,6 +2372,8 @@ public static class ModPanel
             rows.Add(new BestSellersTable.BestRow
             {
                 name = GetProductDisplayName(agg.raw),
+                pkey = kv.Key,
+                raw = agg.raw,
                 sold = sold,
                 produced = agg.produced,
                 stock = stock,

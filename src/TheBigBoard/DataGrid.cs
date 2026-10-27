@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -310,6 +311,142 @@ public static class DataGrid
         var btn = rowGO.AddComponent<Button>();
         btn.targetGraphic = bgImg;
         btn.onClick.AddListener(() => onClick());
+    }
+
+    // ---------- context menu (right-click actions on rows) ----------
+
+    public static void AddRowRightClick(GameObject rowGO, Action onRightClick)
+    {
+        if (rowGO == null || onRightClick == null) return;
+        // Buttons only fire on left click; an EventTrigger sees the right
+        // button too. Both can live on the same row without conflict.
+        var trigger = rowGO.GetComponent<EventTrigger>();
+        if (trigger == null) trigger = rowGO.AddComponent<EventTrigger>();
+        var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+        entry.callback.AddListener((data) =>
+        {
+            var pd = data as PointerEventData;
+            if (pd != null && pd.button == PointerEventData.InputButton.Right)
+            {
+                try { onRightClick(); } catch { }
+            }
+        });
+        trigger.triggers.Add(entry);
+    }
+
+    /// <summary>Generic right-click menu: title + one button per action.
+    /// The caller owns the returned root (destroy it to close); onClose fires
+    /// on every close path so the caller can clear its reference. Positioned
+    /// at the anchor row's right edge, clamped inside the parent (row world
+    /// position keeps this camera-independent).</summary>
+    public static GameObject ShowContextMenu(Transform parent, GameObject anchorRow,
+        string title, List<KeyValuePair<string, Action>> items, Action onClose)
+    {
+        var root = new GameObject("ContextMenu");
+        root.transform.SetParent(parent, false);
+        Stretch(root);
+        Action close = null;
+        close = () =>
+        {
+            try { if (root != null) UnityEngine.Object.Destroy(root); } catch { }
+            try { if (onClose != null) onClose(); } catch { }
+        };
+        // Transparent full-cover blocker: any outside click closes the menu.
+        var blockerGO = new GameObject("ContextBlocker");
+        blockerGO.transform.SetParent(root.transform, false);
+        Stretch(blockerGO);
+        var blockerBg = blockerGO.AddComponent<Image>();
+        blockerBg.color = new Color(0, 0, 0, 0);
+        var blockerBtn = blockerGO.AddComponent<Button>();
+        blockerBtn.targetGraphic = blockerBg;
+        blockerBtn.onClick.AddListener(() => close());
+
+        const float menuWidth = 460f;
+        var menuGO = new GameObject("ContextBox");
+        menuGO.transform.SetParent(root.transform, false);
+        var menuBg = menuGO.AddComponent<Image>();
+        menuBg.color = new Color(0.12f, 0.14f, 0.18f, 1f);
+        var outline = menuGO.AddComponent<Outline>();
+        outline.effectColor = new Color(0.32f, 0.36f, 0.42f, 1f);
+        outline.effectDistance = new Vector2(2f, 2f);
+        var layout = menuGO.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(14, 14, 12, 12);
+        layout.spacing = 8f;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        var fitter = menuGO.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        var menuRect = menuGO.GetComponent<RectTransform>();
+        menuRect.anchorMin = new Vector2(0.5f, 0.5f);
+        menuRect.anchorMax = new Vector2(0.5f, 0.5f);
+        menuRect.pivot = new Vector2(0f, 1f);
+        menuRect.sizeDelta = new Vector2(menuWidth, 0f);
+
+        if (!string.IsNullOrEmpty(title))
+        {
+            var titleGO = new GameObject("ContextTitle");
+            titleGO.transform.SetParent(menuGO.transform, false);
+            var titleBg = titleGO.AddComponent<Image>();
+            titleBg.color = new Color(0, 0, 0, 0);
+            var titleText = Text("ContextTitleLabel", title, 24,
+                TMPro.HorizontalAlignmentOptions.Left,
+                TMPro.VerticalAlignmentOptions.Middle, InkGrey);
+            titleText.transform.SetParent(titleGO.transform, false);
+            Anchor(titleText.gameObject, 0f, 0f, 1f, 1f, 8f, 4f, -8f, -4f);
+            titleText.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            titleText.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+            var titleSize = titleGO.AddComponent<LayoutElement>();
+            titleSize.minHeight = 44f;
+        }
+        if (items != null)
+        {
+            foreach (var kv in items)
+            {
+                var captured = kv;
+                var itemGO = new GameObject("ContextItem");
+                itemGO.transform.SetParent(menuGO.transform, false);
+                var itemBg = itemGO.AddComponent<Image>();
+                itemBg.color = RowBgAlt;
+                var itemBtn = itemGO.AddComponent<Button>();
+                itemBtn.targetGraphic = itemBg;
+                var itemText = Text("ContextItemLabel", captured.Key, 28,
+                    TMPro.HorizontalAlignmentOptions.Left,
+                    TMPro.VerticalAlignmentOptions.Middle, InkLight);
+                itemText.transform.SetParent(itemGO.transform, false);
+                Anchor(itemText.gameObject, 0f, 0f, 1f, 1f, 20f, 6f, -20f, -6f);
+                itemText.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+                itemText.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+                var itemSize = itemGO.AddComponent<LayoutElement>();
+                itemSize.minHeight = 76f;
+                itemBtn.onClick.AddListener(() =>
+                {
+                    try { if (captured.Value != null) captured.Value(); } catch { }
+                    close();
+                });
+            }
+        }
+        try
+        {
+            var parentRect = parent as RectTransform;
+            if (parentRect != null && anchorRow != null)
+            {
+                Vector3 local = parentRect.InverseTransformPoint(anchorRow.transform.position);
+                Canvas.ForceUpdateCanvases();
+                float h = menuRect.rect.height;
+                if (h <= 0) h = 200f;
+                var pr = parentRect.rect;
+                float mx = local.x + 40f;
+                float my = local.y + 40f;
+                mx = Mathf.Min(Mathf.Max(mx, pr.xMin + 8f), pr.xMax - menuWidth - 8f);
+                my = Mathf.Min(Mathf.Max(my, pr.yMin + h + 8f), pr.yMax - 8f);
+                menuRect.anchoredPosition = new Vector2(mx, my);
+            }
+        }
+        catch { }
+        return root;
     }
 
     public static void AddHeadButton(GameObject parent, int sortCol,
