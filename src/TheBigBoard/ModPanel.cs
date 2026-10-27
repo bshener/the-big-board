@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,8 +10,10 @@ namespace TheBigBoard;
 
 /// <summary>
 /// Vanilla-style panel: compact text tabs + dark data grid (light header row,
-/// dark rows, right-aligned numbers, scrollable). Tab 1: product sales search
-/// per store + total, from BuildingRegistration.orderHistory.
+/// dark rows, right-aligned numbers, scrollable). SALES has two sub-tabs:
+/// SEARCH (product sales search per store + total, from
+/// BuildingRegistration.orderHistory) and BEST SELLERS (per-product top list
+/// with sold/produced/revenue/profit/top-store).
 /// Tab 2: current stock per player building (warehouses, factories, stores)
 /// for a product name, via Helpers.BuildingHelper.CountTotalResourcesInStock,
 /// plus TODAY / YESTERDAY / LAST WEEK grouped columns with IN / OUT flows:
@@ -47,6 +50,56 @@ public static class ModPanel
     static string _lastSelectedKey; // null = ALL products
     static string _lastRaw = "";
     static ModContext _lastContext;
+
+    // --- SALES sub-tabs: 0 = SEARCH (existing product search), 1 = BEST
+    // SELLERS (per-product top list). The search view keeps its layout; the
+    // best view has its own pills + store strip + table below.
+    static int _salesSubTab;
+    static GameObject _salesSearchView;
+    static GameObject _salesBestView;
+    static readonly Image[] _salesSubTabBgs = new Image[2];
+    static readonly TMPro.TMP_Text[] _salesSubTabLabels = new TMPro.TMP_Text[2];
+    static ModContext _salesContext;
+
+    // --- BEST SELLERS state: flat hit list (retail sales with money +
+    // factory production), re-aggregated on pill/store switches without
+    // re-scanning. Produced hits carry produced=true and no money (factory
+    // transfer pricing is not retail profit).
+    static BestSellersTable _bestTable;
+    static Transform _bestStoreList;
+    static TMPro.TMP_Text _bestStoreText;
+    static GameObject _bestPillBar;
+    static readonly List<TimePill> _bestTimePills = new List<TimePill>();
+    static List<BestHit> _bestHits;
+    static int _bestRange;
+    static string _bestStore; // null = ALL stores
+    static int _bestDay;
+
+    sealed class BestHit
+    {
+        public string pkey;
+        public string raw;
+        public string store;
+        public int day;
+        public long amt;
+        public double revenue;
+        public double cost;
+        public bool produced;
+    }
+
+    sealed class BestAgg
+    {
+        public string raw;
+        public long sold;
+        public double revenue;
+        public double cost;
+        public long produced;
+        public Dictionary<string, long> perStore = new Dictionary<string, long>();
+        public Dictionary<string, double> perStoreRev = new Dictionary<string, double>();
+        public Dictionary<string, double> perStoreCost = new Dictionary<string, double>();
+    }
+
+    const string FactoryBusinessType = "ba:businesstype_factory";
 
     // --- TAB 2 (stock) state: mirrors the sales tab, but the data source is
     // current stock in the player's own buildings (warehouses, factories,
@@ -184,7 +237,7 @@ public static class ModPanel
         catch (System.Exception ex)
         {
             context?.Logger.Warn("The Big Board panel build failed: " + ex.GetType().Name + ": " + ex.Message);
-            if (_panel != null) Object.Destroy(_panel);
+            if (_panel != null) UnityEngine.Object.Destroy(_panel);
             _panel = null;
             _salesTable = null;
             return;
@@ -285,10 +338,18 @@ public static class ModPanel
 
     static void BuildSalesPage(GameObject page, ModContext context)
     {
+        _salesContext = context;
+        // SALES sub-tabs: SEARCH (product search per store, existing) and
+        // BEST SELLERS (per-product top list with profit + production). The
+        // search keeps its two-column layout inside its own view container.
+        BuildSalesSubTabs(page);
+        _salesSearchView = new GameObject("SalesSearchView");
+        _salesSearchView.transform.SetParent(page.transform, false);
+        Anchor(_salesSearchView, 0f, 0f, 1f, 1f, 0f, 0f, 0f, -104f);
         // Two columns like the vanilla BizMan screens: search +
         // filters + product list on the left, store data grid on the right.
         var leftGO = new GameObject("LeftCol");
-        leftGO.transform.SetParent(page.transform, false);
+        leftGO.transform.SetParent(_salesSearchView.transform, false);
         Anchor(leftGO, 0f, 0f, 0.36f, 1f, 0f, 0f, -24f, 0f);
         var leftLayout = leftGO.AddComponent<VerticalLayoutGroup>();
         leftLayout.spacing = 14f;
@@ -298,7 +359,7 @@ public static class ModPanel
         leftLayout.childForceExpandHeight = false;
 
         var rightGO = new GameObject("RightCol");
-        rightGO.transform.SetParent(page.transform, false);
+        rightGO.transform.SetParent(_salesSearchView.transform, false);
         Anchor(rightGO, 0.36f, 0f, 1f, 1f, 24f, 0f, 0f, 0f);
 
         // --- LEFT: search box. Readout + tap: typing goes through the GAME's
@@ -412,6 +473,9 @@ public static class ModPanel
         _salesTable.BuildRows(rightGO,
             "RowsScroll", "Viewport", "Rows", "Scrollbar", -264f);
         _salesTable.ShowInfo("Type a product name and press SEARCH.", 30);
+
+        BuildBestView(page, context);
+        RefreshSalesSubTabStyles();
     }
 
     static void BuildStockPage(GameObject page, ModContext context)
@@ -1696,6 +1760,519 @@ public static class ModPanel
             string what = key == null ? "ALL" : GetProductDisplayName(key);
             _lastContext.Logger.Info("The Big Board product filter: " + what);
         }
+    }
+
+    // ================= SALES sub-tabs (SEARCH | BEST SELLERS) =================
+
+    static void BuildSalesSubTabs(GameObject page)
+    {
+        string[] names = { "SEARCH", "BEST SELLERS" };
+        for (int i = 0; i < 2; i++)
+        {
+            int index = i;
+            var tabGO = new GameObject("SalesSubTab" + i);
+            tabGO.transform.SetParent(page.transform, false);
+            Anchor(tabGO, 0f, 1f, 0f, 1f,
+                i == 0 ? 0f : 330f, -88f, i == 0 ? 310f : 700f, 0f);
+            var bg = tabGO.AddComponent<Image>();
+            bg.color = RowBgAlt;
+            var btn = tabGO.AddComponent<Button>();
+            btn.targetGraphic = bg;
+            var label = Text("SalesSubTabLabel" + i, names[i], 28,
+                TMPro.HorizontalAlignmentOptions.Center,
+                TMPro.VerticalAlignmentOptions.Middle, InkLight);
+            label.transform.SetParent(tabGO.transform, false);
+            Anchor(label.gameObject, 0f, 0f, 1f, 1f, 16f, 8f, -16f, -8f);
+            _salesSubTabBgs[i] = bg;
+            _salesSubTabLabels[i] = label;
+            btn.onClick.AddListener(() => SelectSalesSubTab(index));
+        }
+    }
+
+    static void SelectSalesSubTab(int index)
+    {
+        if (index < 0 || index > 1) return;
+        _salesSubTab = index;
+        RefreshSalesSubTabStyles();
+        if (_salesSearchView != null) _salesSearchView.SetActive(index == 0);
+        if (_salesBestView != null) _salesBestView.SetActive(index == 1);
+        // Lazy first scan: opening BEST SELLERS aggregates everything once;
+        // pills + store tabs afterwards only re-aggregate the cached hits.
+        if (index == 1 && _bestHits == null) DoBestScan(_salesContext);
+        if (_lastContext != null)
+            _lastContext.Logger.Info("The Big Board sales view: " + (index == 0 ? "SEARCH" : "BEST SELLERS"));
+    }
+
+    static void RefreshSalesSubTabStyles()
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (_salesSubTabBgs[i] == null || _salesSubTabLabels[i] == null) continue;
+            bool sel = i == _salesSubTab;
+            _salesSubTabBgs[i].color = sel ? Accent : RowBgAlt;
+            _salesSubTabLabels[i].color = sel ? Color.white : InkLight;
+        }
+    }
+
+    static void BuildBestView(GameObject page, ModContext context)
+    {
+        _salesSubTab = 0;
+        var bestGO = new GameObject("SalesBestView");
+        bestGO.transform.SetParent(page.transform, false);
+        Anchor(bestGO, 0f, 0f, 1f, 1f, 0f, 0f, 0f, -104f);
+        bestGO.SetActive(false);
+        _salesBestView = bestGO;
+
+        // Time pills + REFRESH in one top row.
+        _bestPillBar = new GameObject("BestPillBar");
+        _bestPillBar.transform.SetParent(bestGO.transform, false);
+        Anchor(_bestPillBar, 0f, 1f, 1f, 1f, 0f, -70f, 0f, 0f);
+        var pillLayout = _bestPillBar.AddComponent<HorizontalLayoutGroup>();
+        pillLayout.spacing = 12f;
+        pillLayout.childControlWidth = true;
+        pillLayout.childControlHeight = true;
+        pillLayout.childForceExpandWidth = true;
+        pillLayout.childForceExpandHeight = true;
+        for (int ti = 0; ti < 3; ti++) AddBestTimePill(ti);
+        var refreshGO = new GameObject("BestRefresh");
+        refreshGO.transform.SetParent(_bestPillBar.transform, false);
+        var refreshBg = refreshGO.AddComponent<Image>();
+        refreshBg.color = Accent;
+        var refreshBtn = refreshGO.AddComponent<Button>();
+        refreshBtn.targetGraphic = refreshBg;
+        var refreshLabel = Text("BestRefreshLabel", "REFRESH", 26,
+            TMPro.HorizontalAlignmentOptions.Center,
+            TMPro.VerticalAlignmentOptions.Middle, Color.white);
+        refreshLabel.transform.SetParent(refreshGO.transform, false);
+        Stretch(refreshLabel.gameObject);
+        var refreshSize = refreshGO.AddComponent<LayoutElement>();
+        refreshSize.flexibleWidth = 1f;
+        refreshSize.minHeight = 60f;
+        refreshBtn.onClick.AddListener(() => DoBestScan(_salesContext));
+
+        // Store filter strip (same bordered-card pattern as the search view).
+        var filterCardGO = new GameObject("BestStoreFilterCard");
+        filterCardGO.transform.SetParent(bestGO.transform, false);
+        Anchor(filterCardGO, 0f, 1f, 1f, 1f, 0f, -268f, 0f, -84f);
+        var filterCardBg = filterCardGO.AddComponent<Image>();
+        filterCardBg.color = new Color(0.12f, 0.14f, 0.18f, 1f);
+        var filterCardOutline = filterCardGO.AddComponent<Outline>();
+        filterCardOutline.effectColor = new Color(0.32f, 0.36f, 0.42f, 1f);
+        filterCardOutline.effectDistance = new Vector2(2f, 2f);
+        var filterCardLayout = filterCardGO.AddComponent<VerticalLayoutGroup>();
+        filterCardLayout.padding = new RectOffset(18, 14, 18, 14);
+        filterCardLayout.spacing = 8f;
+        filterCardLayout.childControlWidth = true;
+        filterCardLayout.childControlHeight = false;
+        filterCardLayout.childForceExpandWidth = true;
+        filterCardLayout.childForceExpandHeight = false;
+
+        _bestStoreText = Text("BestStoreText", "STORES", 26, TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, InkGrey);
+        _bestStoreText.transform.SetParent(filterCardGO.transform, false);
+        var matchSize = _bestStoreText.gameObject.AddComponent<LayoutElement>();
+        matchSize.minHeight = 44f;
+        _bestStoreText.textWrappingMode = TMPro.TextWrappingModes.Normal;
+
+        var storeScrollGO = new GameObject("BestStoreStripScroll");
+        storeScrollGO.transform.SetParent(filterCardGO.transform, false);
+        var storeScrollSize = storeScrollGO.AddComponent<LayoutElement>();
+        storeScrollSize.minHeight = 96f;
+        storeScrollSize.flexibleWidth = 1f;
+        var storeScroll = storeScrollGO.AddComponent<ScrollRect>();
+        storeScroll.horizontal = true;
+        storeScroll.vertical = false;
+        storeScroll.movementType = ScrollRect.MovementType.Clamped;
+
+        var storeViewportGO = new GameObject("BestStoreStripViewport");
+        storeViewportGO.transform.SetParent(storeScrollGO.transform, false);
+        Stretch(storeViewportGO);
+        storeViewportGO.AddComponent<RectMask2D>();
+
+        var storeContentGO = new GameObject("BestStores");
+        storeContentGO.transform.SetParent(storeViewportGO.transform, false);
+        var storeContentRect = Rect(storeContentGO);
+        storeContentRect.anchorMin = new Vector2(0f, 0f);
+        storeContentRect.anchorMax = new Vector2(0f, 1f);
+        storeContentRect.pivot = new Vector2(0f, 0.5f);
+        storeContentRect.offsetMin = Vector2.zero;
+        storeContentRect.offsetMax = Vector2.zero;
+        var storeFitter = storeContentGO.AddComponent<ContentSizeFitter>();
+        storeFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        storeFitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+        var storeList = storeContentGO.AddComponent<HorizontalLayoutGroup>();
+        storeList.spacing = 10f;
+        storeList.childControlWidth = true;
+        storeList.childControlHeight = true;
+        storeList.childForceExpandWidth = false;
+        storeList.childForceExpandHeight = true;
+        storeScroll.viewport = storeViewportGO.GetComponent<RectTransform>();
+        storeScroll.content = storeContentRect;
+        _bestStoreList = storeContentGO.transform;
+
+        _bestTable = new BestSellersTable();
+        _bestTable.Init(context);
+        _bestTable.BuildHeader(bestGO, "BestGridHeader", 0f, 0f, -348f, -284f);
+        _bestTable.BuildRows(bestGO,
+            "BestRowsScroll", "BestViewport", "BestRows", "BestScrollbar", -356f);
+        _bestTable.ShowInfo("Open BEST SELLERS to scan all sales.", 30);
+    }
+
+    static void AddBestTimePill(int index)
+    {
+        if (_bestPillBar == null) return;
+        var pillGO = new GameObject("BestTimePill" + index);
+        pillGO.transform.SetParent(_bestPillBar.transform, false);
+        var bg = pillGO.AddComponent<Image>();
+        bg.color = new Color(0.20f, 0.23f, 0.28f, 1f);
+        var btn = pillGO.AddComponent<Button>();
+        btn.targetGraphic = bg;
+        string[] names = { "TODAY", "YESTERDAY", "LAST WEEK" };
+        var label = Text("BestTimePillLabel", names[index >= 0 && index < 3 ? index : 0], 26, TMPro.HorizontalAlignmentOptions.Center, TMPro.VerticalAlignmentOptions.Middle, InkLight);
+        label.transform.SetParent(pillGO.transform, false);
+        Anchor(label.gameObject, 0f, 0f, 1f, 1f, 12f, 6f, -12f, -6f);
+        label.overflowMode = TMPro.TextOverflowModes.Truncate;
+        var size = pillGO.AddComponent<LayoutElement>();
+        size.flexibleWidth = 2f;
+        size.minHeight = 60f;
+        _bestTimePills.Add(new TimePill { index = index, bg = bg, label = label });
+        int captured = index;
+        btn.onClick.AddListener(() => SelectBestRange(captured));
+    }
+
+    static void SelectBestRange(int index)
+    {
+        if (index < 0 || index > 2) return;
+        _bestRange = index;
+        RefreshBestPillStyles();
+        RebuildBestAggregates();
+        if (_salesContext != null)
+            _salesContext.Logger.Info("The Big Board best sellers time filter: " + (index == 0 ? "TODAY" : index == 1 ? "YESTERDAY" : "LAST WEEK"));
+    }
+
+    static void RefreshBestPillStyles()
+    {
+        foreach (var pill in _bestTimePills)
+        {
+            if (pill == null || pill.bg == null || pill.label == null) continue;
+            bool sel = pill.index == _bestRange;
+            pill.bg.color = sel ? Accent : new Color(0.20f, 0.23f, 0.28f, 1f);
+            pill.label.color = sel ? Color.white : InkLight;
+        }
+    }
+
+    static void DoBestScan(ModContext context)
+    {
+        if (_bestTable == null) return;
+        _salesContext = context;
+        _bestTable.ShowInfo("Scanning all sales...", 32);
+        if (_bestStoreText != null) { _bestStoreText.gameObject.SetActive(true); _bestStoreText.text = "Scanning..."; }
+        PhoneButtonInstaller.RunNextFrame(() => DoBestScanNow(context));
+    }
+
+    static void DoBestScanNow(ModContext context)
+    {
+        if (_bestTable == null) return;
+        try
+        {
+            _salesContext = context;
+            var game = SaveGameManager.Current;
+            if (game == null || game.BuildingRegistrations == null) return;
+            _bestDay = game.Day;
+            // Full unfiltered hit list: retail sales carry money (revenue +
+            // cost), factory history + live exports carry production only.
+            var hits = new List<BestHit>();
+            foreach (var reg in game.BuildingRegistrations)
+            {
+                if (reg == null || reg is Entities.Warehouse) continue;
+                string name = !string.IsNullOrEmpty(reg.BusinessName)
+                    ? reg.BusinessName
+                    : (reg.StreetName + " " + reg.StreetNumber);
+                bool isFactory = string.Equals(reg.businessTypeName, FactoryBusinessType, StringComparison.OrdinalIgnoreCase);
+                if (reg.orderHistory != null)
+                {
+                    foreach (var entry in reg.orderHistory)
+                    {
+                        if (entry == null || entry.itemSales == null) continue;
+                        foreach (var report in entry.itemSales)
+                        {
+                            if (report == null || report.itemName == null) continue;
+                            if (report.amountSold <= 0) continue;
+                            if (isFactory)
+                            {
+                                // Factory history records production exports, not
+                                // retail sales (ProcessDailyFactoryOrders).
+                                hits.Add(new BestHit
+                                {
+                                    pkey = report.itemName.ToLowerInvariant(),
+                                    raw = report.itemName,
+                                    store = name,
+                                    day = entry.dayNumber,
+                                    amt = report.amountSold,
+                                    produced = true
+                                });
+                            }
+                            else
+                            {
+                                hits.Add(new BestHit
+                                {
+                                    pkey = report.itemName.ToLowerInvariant(),
+                                    raw = report.itemName,
+                                    store = name,
+                                    day = entry.dayNumber,
+                                    amt = report.amountSold,
+                                    revenue = report.totalPrice,
+                                    cost = report.totalWholesalePrice,
+                                    produced = false
+                                });
+                            }
+                        }
+                    }
+                }
+                if (!isFactory)
+                {
+                    // TODAY is never in orderHistory: aggregate the live
+                    // completed paid orders as today hits (same as SEARCH).
+                    try
+                    {
+                        var live = reg.unprocessedCompletedOrders;
+                        if (live != null)
+                        {
+                            foreach (var order in live)
+                            {
+                                if (order == null || !order.completed || order.entries == null) continue;
+                                foreach (var e in order.entries)
+                                {
+                                    if (e == null || e.itemName == null) continue;
+                                    if (!e.available || !e.priceAccceptable || !e.paid) continue;
+                                    hits.Add(new BestHit
+                                    {
+                                        pkey = e.itemName.ToLowerInvariant(),
+                                        raw = e.itemName,
+                                        store = name,
+                                        day = _bestDay,
+                                        amt = 1,
+                                        revenue = e.price,
+                                        cost = e.wholesalePrice,
+                                        produced = false
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+                // Today's live factory production (any building carrying
+                // exports, normally only factories).
+                try
+                {
+                    var exports = reg.factoryExports;
+                    if (exports != null)
+                    {
+                        foreach (var x in exports)
+                        {
+                            if (x == null || x.itemName == null || x.amount <= 0) continue;
+                            hits.Add(new BestHit
+                            {
+                                pkey = x.itemName.ToLowerInvariant(),
+                                raw = x.itemName,
+                                store = name,
+                                day = _bestDay,
+                                amt = x.amount,
+                                produced = true
+                            });
+                        }
+                    }
+                }
+                catch { }
+            }
+            _bestHits = hits;
+            // Default to the newest range that actually has hits.
+            _bestRange = 0;
+            if (!BestRangeHasHits(0)) _bestRange = BestRangeHasHits(1) ? 1 : 2;
+            _bestStore = null;
+            RefreshBestPillStyles();
+            RebuildBestAggregates();
+            int sales = 0;
+            int prod = 0;
+            foreach (var h in hits) { if (h.produced) prod++; else sales++; }
+            context?.Logger.Info("The Big Board best sellers scan: day " + _bestDay + ", range " + _bestRange + ", " + sales + " sales hits + " + prod + " production hits.");
+        }
+        catch (System.Exception ex)
+        {
+            context?.Logger.Warn("The Big Board best sellers scan failed: " + ex.Message);
+        }
+    }
+
+    static void RebuildBestAggregates()
+    {
+        var byProduct = new Dictionary<string, BestAgg>();
+        var storeSold = new Dictionary<string, long>();
+        if (_bestHits != null)
+        {
+            foreach (var h in _bestHits)
+            {
+                if (!InBestRange(h.day)) continue;
+                BestAgg agg;
+                if (!byProduct.TryGetValue(h.pkey, out agg))
+                {
+                    agg = new BestAgg { raw = h.raw };
+                    byProduct[h.pkey] = agg;
+                }
+                if (h.produced)
+                {
+                    agg.produced += h.amt;
+                }
+                else
+                {
+                    agg.sold += h.amt;
+                    agg.revenue += h.revenue;
+                    agg.cost += h.cost;
+                    long cur;
+                    agg.perStore.TryGetValue(h.store, out cur);
+                    agg.perStore[h.store] = cur + h.amt;
+                    double rev;
+                    agg.perStoreRev.TryGetValue(h.store, out rev);
+                    agg.perStoreRev[h.store] = rev + h.revenue;
+                    double cst;
+                    agg.perStoreCost.TryGetValue(h.store, out cst);
+                    agg.perStoreCost[h.store] = cst + h.cost;
+                    long ssum;
+                    storeSold.TryGetValue(h.store, out ssum);
+                    storeSold[h.store] = ssum + h.amt;
+                }
+            }
+        }
+        // Selected store has no sales in this range: fall back to ALL.
+        if (_bestStore != null && !storeSold.ContainsKey(_bestStore))
+            _bestStore = null;
+        var rows = new List<BestSellersTable.BestRow>();
+        foreach (var kv in byProduct)
+        {
+            var agg = kv.Value;
+            long sold = agg.sold;
+            double revenue = agg.revenue;
+            double cost = agg.cost;
+            if (_bestStore != null)
+            {
+                if (!agg.perStore.TryGetValue(_bestStore, out sold)) sold = 0;
+                if (!agg.perStoreRev.TryGetValue(_bestStore, out revenue)) revenue = 0;
+                if (!agg.perStoreCost.TryGetValue(_bestStore, out cost)) cost = 0;
+            }
+            // PRODUCED stays product-global: factories are not stores.
+            if (sold == 0 && agg.produced == 0) continue;
+            string top = "-";
+            long topAmt = 0;
+            foreach (var sp in agg.perStore)
+            {
+                if (sp.Value > topAmt) { topAmt = sp.Value; top = sp.Key; }
+            }
+            rows.Add(new BestSellersTable.BestRow
+            {
+                name = GetProductDisplayName(agg.raw),
+                sold = sold,
+                produced = agg.produced,
+                revenue = revenue,
+                profit = revenue - cost,
+                topStore = top
+            });
+        }
+        rows.Sort((a, b) =>
+        {
+            int c = b.sold.CompareTo(a.sold);
+            if (c == 0) c = b.profit.CompareTo(a.profit);
+            if (c == 0) c = string.Compare(a.name, b.name, StringComparison.Ordinal);
+            return c;
+        });
+        string label = _bestStore == null
+            ? ("TOTAL (" + rows.Count + " products)")
+            : (_bestStore + " (" + rows.Count + " products)");
+        _bestTable.ShowResults(rows, label);
+        UpdateBestStoreBar(storeSold);
+        BuildBestStoreTabs(storeSold);
+    }
+
+    static void UpdateBestStoreBar(Dictionary<string, long> storeSold)
+    {
+        if (_bestStoreText == null) return;
+        int n = storeSold != null ? storeSold.Count : 0;
+        string range = _bestRange == 1 ? ("DAY " + (_bestDay - 1))
+            : _bestRange == 2 ? ("DAYS " + (_bestDay - 6) + "-" + _bestDay)
+            : ("DAY " + _bestDay);
+        if (n == 0)
+        {
+            _bestStoreText.gameObject.SetActive(true);
+            _bestStoreText.text = "STORES (0) - no sales in " + range + ".";
+            return;
+        }
+        _bestStoreText.text = "STORES (" + n + ") - tap a tab to filter | " + range + ":";
+    }
+
+    static void BuildBestStoreTabs(Dictionary<string, long> storeSold)
+    {
+        if (_bestStoreList == null) return;
+        DataGrid.ClearRows(_bestStoreList);
+        DataGrid.Warmup(_bestStoreList);
+        if (storeSold == null || storeSold.Count == 0) return;
+        var sorted = new List<KeyValuePair<string, long>>(storeSold);
+        sorted.Sort((a, b) => b.Value.CompareTo(a.Value));
+        long total = 0;
+        foreach (var kv in sorted) total += kv.Value;
+        AddBestStoreTab(null, "ALL", total);
+        foreach (var kv in sorted)
+            AddBestStoreTab(kv.Key, kv.Key, kv.Value);
+    }
+
+    static void AddBestStoreTab(string key, string name, long qty)
+    {
+        if (_bestStoreList == null) return;
+        bool sel = key == _bestStore;
+        var tabGO = new GameObject(key == null ? "BestStoreAll" : "BestStoreTab");
+        tabGO.transform.SetParent(_bestStoreList, false);
+        var bg = tabGO.AddComponent<Image>();
+        bg.color = sel ? Accent : RowBgAlt;
+        var btn = tabGO.AddComponent<Button>();
+        btn.targetGraphic = bg;
+        var label = Text("BestStoreTabLabel", name + " (" + qty.ToString("N0") + ")", 26,
+            TMPro.HorizontalAlignmentOptions.Center, TMPro.VerticalAlignmentOptions.Middle,
+            sel ? Color.white : InkLight);
+        label.transform.SetParent(tabGO.transform, false);
+        Anchor(label.gameObject, 0f, 0f, 1f, 1f, 16f, 8f, -16f, -8f);
+        label.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+        label.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+        var size = tabGO.AddComponent<LayoutElement>();
+        size.minWidth = 200f;
+        size.preferredWidth = Mathf.Clamp(120f + (name != null ? name.Length : 3) * 17f, 220f, 560f);
+        size.minHeight = 88f;
+        string captured = key;
+        btn.onClick.AddListener(() => SelectBestStore(captured));
+    }
+
+    static void SelectBestStore(string key)
+    {
+        _bestStore = key;
+        RebuildBestAggregates();
+        if (_salesContext != null)
+            _salesContext.Logger.Info("The Big Board best sellers store filter: " + (key ?? "ALL"));
+    }
+
+    static bool InBestRange(int day)
+    {
+        if (_bestRange == 0) return day == _bestDay;
+        if (_bestRange == 1) return day == _bestDay - 1;
+        return day > _bestDay - 7 && day <= _bestDay;
+    }
+
+    static bool BestRangeHasHits(int index)
+    {
+        if (_bestHits == null) return false;
+        foreach (var h in _bestHits)
+        {
+            bool inR = index == 0 ? h.day == _bestDay
+                : index == 1 ? h.day == _bestDay - 1
+                : h.day > _bestDay - 7 && h.day <= _bestDay;
+            if (inR) return true;
+        }
+        return false;
     }
 
     // Table primitives (Text/Rect/Stretch/Anchor), row clearing, and the
