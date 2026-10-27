@@ -8,7 +8,7 @@
 > command panel for Big Ambitions: track buildings, businesses, staff,
 > factory, sales and stock in one phone app, sitting alongside the
 > vanilla apps.
-> Release version: 0.9.0 (beta) — see `docs/branding.md`.
+> Release version: 0.10.0 (beta) — see `docs/branding.md`.
 
 ---
 
@@ -43,7 +43,7 @@ One tap on your phone. Six tabs. No more guessing.
 
 🏭 **FACTORY** — production plan per product (today + week) and a supply view that tells you exactly how many days of each ingredient you have left, including incoming importer deliveries. Size your next order before you run dry.
 
-💰 **SALES** — search any product, see what each store sold today, yesterday or last week.
+💰 **SALES** — BEST SELLERS by default: per-product SOLD, PRODUCED, live STOCK, REVENUE, PROFIT and TOP STORE, with TODAY / YESTERDAY / LAST WEEK + REFRESH and an ALL + per-store filter. Every column sorts and resizes. Right-click any row for Inspect in STOCK. Prefer hunting a single product? Switch to SEARCH and see what each store sold.
 
 📦 **STOCK** — live stock across all your warehouses, factories and stores, with IN/OUT flows per building. Even shows products with zero stock but an active recipe, contract or route — so you know *why* the shelf is empty.
 
@@ -78,7 +78,7 @@ The Big Board is free and always will be. If it saved you time or made your empi
 
 ## Screenshot shot list (DO NOT PASTE — for us)
 
-Files in `docs/screenshots/` (game UI in English, 1920px+, Day 446 save):
+Files in `docs/screenshots/` (game UI in English, 1920px+, Day 449 save):
 
 1. `01-hero-businesses.png` — BUSINESSES tab, checklist visible (the cover).
 2. `02-employee.png` — EMPLOYEE tab, unassigned-staff warnings + ASSIGN.
@@ -86,7 +86,8 @@ Files in `docs/screenshots/` (game UI in English, 1920px+, Day 446 save):
 4. `04-stock-flows.png` — STOCK tab, IN/OUT flows on cloth search.
 5. `05-dead-hours.png` — dead-hours popup on a shop.
 6. `06-buildings-scale.png` — BUILDINGS census, 840 known (scale proof).
-7. `07-sales-search.png` — SALES tab, cloth search, TODAY/YESTERDAY/LAST WEEK.
-8. Optional later: GIF of typing a product name → results appearing.
+7. `07-sales-search.png` — SALES tab, SEARCH sub-tab, cloth search, TODAY/YESTERDAY/LAST WEEK.
+8. `08-best-sellers.png` — SALES tab, BEST SELLERS sub-tab (default view), TODAY, ALL stores (PENDING: user captures on Day 449 save).
+9. Optional later: GIF of typing a product name → results appearing.
 
 Rules for all shots: real mid/late-game save (not empty test save), game UI in English, 1920px+ wide, no debug overlays. Captions under each image on Workshop (one line each).
