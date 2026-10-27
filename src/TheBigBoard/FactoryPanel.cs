@@ -107,6 +107,7 @@ public static class FactoryPanel
         public long stock; // upstream on-hand (own factories + warehouses, stores excluded)
         public long sellToday; // retail units sold today (orderHistory + live orders)
         public long sellWeek; // retail units sold in rolling 7 days (D-6..D)
+        public long sellYday; // retail units sold yesterday (orderHistory, closed day)
         public long prodToday; // manufactured in THIS factory today so far (ledger identity)
         public bool prodTodayExact; // false = unattributable, render "..."
         public long prodWeek; // manufactured in THIS factory in rolling 7 days (ledger identity)
@@ -599,7 +600,7 @@ public static class FactoryPanel
                     _context.Logger.Info("The Big Board factory plan [" + _data.name + "]: "
                         + p.productName + " lines=" + p.lines
                         + " planT=" + p.today + " planW=" + p.week
-                        + " stock=" + p.stock + " sellT=" + p.sellToday + " sellW=" + p.sellWeek
+                        + " stock=" + p.stock + " sellT=" + p.sellToday + " sellY=" + p.sellYday + " sellW=" + p.sellWeek
                         + " prodT=" + (p.prodTodayExact ? p.prodToday.ToString("N0") : "...")
                         + " prodW=" + (p.prodWeekExact ? p.prodWeek.ToString("N0") : "...")
                         + " prodY=" + (p.prodYdayExact ? p.prodYday.ToString("N0") : "..."));
@@ -836,6 +837,7 @@ public static class FactoryPanel
                             if (!byPkey.TryGetValue(rep.itemName, out row)) continue;
                             if (isToday) row.sellToday += rep.amountSold;
                             if (inWeek) row.sellWeek += rep.amountSold;
+                            if (entry.dayNumber == today - 1) row.sellYday += rep.amountSold;
                         }
                     }
                 }
