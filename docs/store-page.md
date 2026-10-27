@@ -87,7 +87,7 @@ Files in `docs/screenshots/` (game UI in English, 1920px+, Day 449 save):
 5. `05-dead-hours.png` — dead-hours popup on a shop.
 6. `06-buildings-scale.png` — BUILDINGS census, 840 known (scale proof).
 7. `07-sales-search.png` — SALES tab, SEARCH sub-tab, cloth search, TODAY/YESTERDAY/LAST WEEK.
-8. `08-best-sellers.png` — SALES tab, BEST SELLERS sub-tab (default view), TODAY, ALL stores (PENDING: user captures on Day 449 save).
+8. `08-best-sellers.png` — SALES tab, BEST SELLERS sub-tab (default view), TODAY, ALL stores, context menu open (Day 449 save).
 9. Optional later: GIF of typing a product name → results appearing.
 
 Rules for all shots: real mid/late-game save (not empty test save), game UI in English, 1920px+ wide, no debug overlays. Captions under each image on Workshop (one line each).
