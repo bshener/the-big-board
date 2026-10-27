@@ -476,15 +476,17 @@ public static class Manufactured
         return sum;
     }
 
-    /// <summary>Manufactured in one factory over [fromDay..today] (live end):
-    /// (liveFactoryStock - ledgerFactoryStock(fromDay)) + histExports +
-    /// warehouse arrivals (only when the factory is the sole own producer of
-    /// the product, else unattributable) + live exports. Exact with a
-    /// completed start snapshot and clean attribution; else "…" upstream.
-    /// Imports/wholesale hit warehouses/stores, never factory stock, so no
-    /// gates needed.</summary>
+    /// <summary>Manufactured in one factory over [fromDay..toDay]. Live end
+    /// (toDay == today): end stock is read live and today's flows included.
+    /// Closed end: end stock is the next day's snapshot (needs HasDay).
+    /// (endStock - ledgerFactoryStock(fromDay)) + histExports + warehouse
+    /// arrivals (only when the factory is the sole own producer of the
+    /// product, else unattributable) + live exports (live end only). Exact
+    /// with completed boundary snapshots and clean attribution; else "…"
+    /// upstream. Imports/wholesale hit warehouses/stores, never factory
+    /// stock, so no gates needed.</summary>
     public static Result ForFactory(BuildingRegistration factoryReg, string pkey, string rawItem,
-        int fromDay, int today, bool soleProducer)
+        int fromDay, int toDay, bool liveEnd, bool soleProducer)
     {
         var r = new Result { Value = 0, Exact = false, Basis = "shipped-proxy" };
         if (factoryReg == null || string.IsNullOrEmpty(pkey)) return r;
@@ -493,19 +495,36 @@ public static class Manufactured
             r.Basis = "fallback:ledger-uncovered";
             return r;
         }
-        long whTotal = WarehouseArrivals(pkey, fromDay, today);
+        if (!liveEnd && !StockHistory.HasDay(toDay + 1))
+        {
+            r.Basis = "fallback:ledger-uncovered";
+            return r;
+        }
+        long whTotal = WarehouseArrivals(pkey, fromDay, toDay);
         if (whTotal > 0 && !soleProducer)
         {
             r.Basis = "fallback:shared-warehouse-flow";
             return r;
         }
-        long sLive = 0;
-        try
+        long sEnd = 0;
+        if (liveEnd)
         {
-            if (!string.IsNullOrEmpty(rawItem))
-                sLive = Helpers.BuildingHelper.CountTotalResourcesInStock(factoryReg, rawItem);
+            try
+            {
+                if (!string.IsNullOrEmpty(rawItem))
+                    sEnd = Helpers.BuildingHelper.CountTotalResourcesInStock(factoryReg, rawItem);
+            }
+            catch { }
         }
-        catch { }
+        else
+        {
+            try
+            {
+                long v;
+                if (StockHistory.TryGet(toDay + 1, StockHistory.AddrKey(factoryReg), pkey, out v)) sEnd = v;
+            }
+            catch { }
+        }
         long sDay = 0;
         try
         {
@@ -514,16 +533,16 @@ public static class Manufactured
         }
         catch { }
         long hist = 0;
-        for (int d = fromDay; d <= today; d++) hist += FactoryHistoryExports(factoryReg, pkey, d);
-        long liveExp = FactoryLiveExports(factoryReg, pkey);
+        for (int d = fromDay; d <= toDay; d++) hist += FactoryHistoryExports(factoryReg, pkey, d);
+        long liveExp = liveEnd ? FactoryLiveExports(factoryReg, pkey) : 0;
         r.S0 = sDay;
-        r.S1 = sLive;
+        r.S1 = sEnd;
         r.Hist = hist;
         r.Wh = whTotal;
         r.LiveE = liveExp;
-        r.Value = Math.Max(0, (sLive - sDay) + hist + whTotal + liveExp);
+        r.Value = Math.Max(0, (sEnd - sDay) + hist + whTotal + liveExp);
         r.Exact = true;
-        r.Basis = "ledger";
+        r.Basis = liveEnd ? "ledger" : "ledger-closed";
         return r;
     }
 
@@ -533,5 +552,14 @@ public static class Manufactured
     {
         if (factoryReg == null || string.IsNullOrEmpty(pkey)) return false;
         return ProducerCount(pkey) == 1;
+    }
+
+    /// <summary>True when at least one own factory has the product in a
+    /// workstation recipe. Products nobody produces (pure imports, wholesale
+    /// goods, services) have manufactured == 0 exactly.</summary>
+    public static bool AnyProducer(string pkey)
+    {
+        if (string.IsNullOrEmpty(pkey)) return false;
+        return ProducerCount(pkey) > 0;
     }
 }

@@ -112,6 +112,8 @@ public static class FactoryPanel
         public bool prodTodayExact; // false = unattributable, render "..."
         public long prodWeek; // manufactured in THIS factory in rolling 7 days (ledger identity)
         public bool prodWeekExact; // false = unattributable, render "..."
+        public long prodYday; // manufactured in THIS factory yesterday, closed day (ledger identity)
+        public bool prodYdayExact; // false = unattributable, render "..."
     }
 
     public sealed class SupplyRow
@@ -638,7 +640,8 @@ public static class FactoryPanel
                         + " planT=" + p.today + " planW=" + p.week
                         + " stock=" + p.stock + " sellT=" + p.sellToday + " sellW=" + p.sellWeek
                         + " prodT=" + (p.prodTodayExact ? p.prodToday.ToString("N0") : "...")
-                        + " prodW=" + (p.prodWeekExact ? p.prodWeek.ToString("N0") : "..."));
+                        + " prodW=" + (p.prodWeekExact ? p.prodWeek.ToString("N0") : "...")
+                        + " prodY=" + (p.prodYdayExact ? p.prodYday.ToString("N0") : "..."));
                 }
             }
         }
@@ -897,31 +900,35 @@ public static class FactoryPanel
             }
             catch { }
         }
-        // PROD TODAY / PROD WEEK: manufactured in THIS factory (ledger
-        // identity). Exact only with ledger coverage and clean warehouse
-        // attribution (sole own producer, or no warehouse arrivals in the
-        // window). Components are logged for audit (hist vs wh overlap).
+        // PROD TODAY / PROD WEEK / PROD YDAY: manufactured in THIS factory
+        // (ledger identity). Exact only with ledger coverage and clean
+        // warehouse attribution (sole own producer, or no warehouse arrivals
+        // in the window). Components are logged for audit.
         try
         {
             if (data.reg != null && today > 0)
             {
                 int weekFrom = today - 6;
+                int yday = today - 1;
                 foreach (var kv in byPkey)
                 {
                     bool sole = Manufactured.IsSoleProducer(data.reg, kv.Key);
-                    var mt = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, today, today, sole);
+                    var mt = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, today, today, true, sole);
                     kv.Value.prodToday = mt.Exact ? mt.Value : 0;
                     kv.Value.prodTodayExact = mt.Exact;
-                    var mw = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, weekFrom, today, sole);
+                    var mw = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, weekFrom, today, true, sole);
                     kv.Value.prodWeek = mw.Exact ? mw.Value : 0;
                     kv.Value.prodWeekExact = mw.Exact;
+                    var my = Manufactured.ForFactory(data.reg, kv.Key, kv.Key, yday, yday, false, sole);
+                    kv.Value.prodYday = my.Exact ? my.Value : 0;
+                    kv.Value.prodYdayExact = my.Exact;
                     if (_context != null)
                         _context.Logger.Info("The Big Board factory made [" + data.name + "]: "
                             + kv.Value.productName
                             + " prodT=" + (mt.Exact ? mt.Value.ToString("N0") : "..." + mt.Basis)
-                            + "[S=" + mt.S1 + "-" + mt.S0 + " H=" + mt.Hist + " W=" + mt.Wh + " L=" + mt.LiveE + "]"
                             + " prodW=" + (mw.Exact ? mw.Value.ToString("N0") : "..." + mw.Basis)
-                            + "[S=" + mw.S1 + "-" + mw.S0 + " H=" + mw.Hist + " W=" + mw.Wh + " L=" + mw.LiveE + "]");
+                            + " prodY=" + (my.Exact ? my.Value.ToString("N0") : "..." + my.Basis)
+                            + "[S=" + my.S1 + "-" + my.S0 + " H=" + my.Hist + " W=" + my.Wh + " L=" + my.LiveE + "]");
                 }
             }
             else
@@ -932,6 +939,8 @@ public static class FactoryPanel
                     kv.Value.prodTodayExact = false;
                     kv.Value.prodWeek = 0;
                     kv.Value.prodWeekExact = false;
+                    kv.Value.prodYday = 0;
+                    kv.Value.prodYdayExact = false;
                 }
             }
         }

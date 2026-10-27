@@ -2368,6 +2368,7 @@ public static class ModPanel
         catch { mfg = null; }
         int mfgExact = 0;
         int mfgFallback = 0;
+        int mfgZero = 0;
         var rows = new List<BestSellersTable.BestRow>();
         foreach (var kv in byProduct)
         {
@@ -2382,8 +2383,10 @@ public static class ModPanel
                 if (!agg.perStoreCost.TryGetValue(_bestStore, out cost)) cost = 0;
             }
             // PRODUCED stays product-global: factories are not stores.
-            // Manufactured (ledger identity) wins over the shipped proxy.
-            long produced = agg.produced;
+            // Manufactured (ledger identity) or exact zero (nobody produces
+            // it) or "..." (unattributable). Shipment counts are NEVER
+            // shown here.
+            long produced = 0;
             bool producedExact = false;
             try
             {
@@ -2393,10 +2396,22 @@ public static class ModPanel
                     produced = mr.Value;
                     producedExact = true;
                 }
+                else if (!Manufactured.AnyProducer(kv.Key))
+                {
+                    produced = 0;
+                    producedExact = true;
+                }
             }
             catch { }
-            if (sold == 0 && produced == 0) continue;
-            if (producedExact) mfgExact++; else mfgFallback++;
+            if (sold == 0 && producedExact && produced == 0) continue;
+            if (producedExact)
+            {
+                bool noProd = false;
+                try { noProd = !Manufactured.AnyProducer(kv.Key); }
+                catch { }
+                if (noProd) mfgZero++; else mfgExact++;
+            }
+            else mfgFallback++;
             string top = "-";
             long topAmt = 0;
             foreach (var sp in agg.perStore)
@@ -2412,6 +2427,7 @@ public static class ModPanel
                 raw = agg.raw,
                 sold = sold,
                 produced = produced,
+                producedExact = producedExact,
                 stock = stock,
                 revenue = revenue,
                 profit = revenue - cost,
@@ -2434,8 +2450,26 @@ public static class ModPanel
         try
         {
             if (_salesContext != null)
+            {
                 _salesContext.Logger.Info("The Big Board best sellers produced basis: "
-                    + mfgExact + " ledger-exact / " + mfgFallback + " shipped-proxy.");
+                    + mfgExact + " ledger-exact / " + mfgZero + " not-produced / "
+                    + mfgFallback + " unknown.");
+                if (mfg != null)
+                {
+                    foreach (var kv in mfg)
+                    {
+                        if (kv.Value.Exact) continue;
+                        BestAgg agg2;
+                        if (!byProduct.TryGetValue(kv.Key, out agg2)) continue;
+                        bool noProd = false;
+                        try { noProd = !Manufactured.AnyProducer(kv.Key); }
+                        catch { }
+                        if (noProd) continue; // exact zero, nothing to explain
+                        _salesContext.Logger.Info("The Big Board produced unknown ["
+                            + GetProductDisplayName(agg2.raw) + "]: " + kv.Value.Basis + ".");
+                    }
+                }
+            }
         }
         catch { }
     }
