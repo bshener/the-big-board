@@ -221,7 +221,7 @@ public static class FactoryPanel
 
         var headBgGO = new GameObject("FactoryHeadBg");
         headBgGO.transform.SetParent(rightGO.transform, false);
-        Anchor(headBgGO, 0f, 1f, 0.62f, 1f, 0f, -128f, 0f, 0f);
+        Anchor(headBgGO, 0f, 1f, 1f, 1f, 0f, -128f, 0f, 0f);
         var headBg = headBgGO.AddComponent<Image>();
         headBg.color = new Color(0.08f, 0.10f, 0.13f, 0.78f);
         _titleText = Text("FactoryTitle", "FACTORY", 44,
