@@ -95,6 +95,7 @@ public static class StockHistory
     static void Load(GameInstance save)
     {
         _snaps.Clear();
+        _days.Clear();
         _firstDay = -1;
         try
         {
@@ -126,6 +127,7 @@ public static class StockHistory
                 if (!int.TryParse(parts[2], out pi) || pi < 0 || pi >= prods.Count) continue;
                 if (!long.TryParse(parts[3], out stock)) continue;
                 _snaps[SKey(day, addrs[ai], prods[pi])] = stock;
+                _days.Add(day);
                 if (_firstDay < 0 || day < _firstDay) _firstDay = day;
             }
             Debug.Log("[The Big Board stock] ledger loaded: " + _snaps.Count + " entries from day " + _firstDay + ".");
@@ -193,6 +195,7 @@ public static class StockHistory
                 if (!int.TryParse(k.Substring(0, nl), out day) || day < cutoff) drop.Add(k);
             }
             foreach (var k in drop) _snaps.Remove(k);
+            _days.RemoveWhere(d => d < cutoff);
             if (drop.Count > 0 && _firstDay >= 0)
             {
                 if (_firstDay < cutoff)
@@ -227,6 +230,7 @@ public static class StockHistory
                     foreach (var k in _snaps.Keys)
                         if (k.StartsWith(prefix)) dropDay.Add(k);
                     foreach (var k in dropDay) _snaps.Remove(k);
+                    _days.Remove(d); // capped day no longer trustworthy as swept
                 }
                 Debug.Log("[The Big Board stock] ledger capped at " + MaxRows + " rows; oldest days dropped.");
             }
@@ -313,6 +317,7 @@ public static class StockHistory
                 // One building per frame: the game never hitches on rollover.
                 yield return null;
             }
+            _days.Add(day); // sweep completed: missing pairs are true zeros
             Prune(day);
             var live = SaveGameManager.Current;
             if (live != null) Save(live);
