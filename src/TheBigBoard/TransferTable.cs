@@ -33,8 +33,8 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
         public LogisticsManagerPlanDestination dest;
     }
 
-    static readonly string[] HeadNames = { "DESTINATION", "PRODUCT",
-        "DEST STOCK", "MIN STOCK", "TO SEND", "SRC STOCK", "EXPORT $" };
+    static readonly string[] HeadNames = { "DESTINATION", "PRODUCT", "SRC STOCK",
+        "DEST STOCK", "MIN STOCK", "TO SEND", "EXPORT $" };
 
     static readonly TMPro.HorizontalAlignmentOptions[] ColAlign =
     {
@@ -44,7 +44,8 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
         TMPro.HorizontalAlignmentOptions.Right,
     };
 
-    static readonly float[] DefaultWidths = { 170f, 150f, 105f, 105f, 105f, 105f };
+    // Widths follow HeadNames minus DESTINATION: PRODUCT, SRC, DEST, MIN, SEND, EXPORT.
+    static readonly float[] DefaultWidths = { 170f, 105f, 150f, 105f, 105f, 105f };
 
     public Action<TransferRow> OnEdit;
     public Action<TransferRow, GameObject, Vector2> OnMenu;
@@ -58,7 +59,7 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
     double _totalExportValue;
 
     public TransferTable()
-        : base("transfer", HeadNames, DefaultWidths, ColAlign, 40f, 40f, 10f,
+        : base("transfer2", HeadNames, DefaultWidths, ColAlign, 40f, 40f, 10f,
             24, null, 0, true)
     {
     }
@@ -77,10 +78,10 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
         {
             case 0: c = string.Compare(a.destName, b.destName, StringComparison.Ordinal); break;
             case 1: c = string.Compare(a.productName, b.productName, StringComparison.Ordinal); break;
-            case 2: c = a.destStock.CompareTo(b.destStock); break;
-            case 3: c = a.target.CompareTo(b.target); break;
-            case 4: c = a.toSend.CompareTo(b.toSend); break;
-            case 5: c = a.srcStock.CompareTo(b.srcStock); break;
+            case 2: c = a.srcStock.CompareTo(b.srcStock); break;
+            case 3: c = a.destStock.CompareTo(b.destStock); break;
+            case 4: c = a.target.CompareTo(b.target); break;
+            case 5: c = a.toSend.CompareTo(b.toSend); break;
             case 6: c = ExportValue(a).CompareTo(ExportValue(b)); break;
         }
         if (c == 0) c = string.Compare(a.destName, b.destName, StringComparison.Ordinal);
@@ -97,7 +98,7 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
     protected override void RenderTotalRow(List<TransferRow> rows)
     {
         var rowGO = DataGrid.AddRowRoot(RowsRoot, "TransferTotalRow", DataGrid.TotalBg);
-        AddCells(rowGO, _totalLabel, "", "", "", _totalSend.ToString("N0"), "",
+        AddCells(rowGO, _totalLabel, "", "", "", "", _totalSend.ToString("N0"),
             _totalExportValue > 0 ? _totalExportValue.ToString("N0") : "",
             DataGrid.ProfitGreen, DataGrid.ProfitGreen);
     }
@@ -112,13 +113,13 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
             ? "ALL" : r.target.ToString("N0");
         Color sendColor = r.toSend > 0 ? DataGrid.ProfitGreen : DataGrid.InkGrey;
         AddCells(rowGO, r.destName, r.productName,
-            r.destStock.ToString("N0"), targetText,
-            r.toSend.ToString("N0"), r.srcStock.ToString("N0"), exportText,
+            r.srcStock.ToString("N0"), r.destStock.ToString("N0"), targetText,
+            r.toSend.ToString("N0"), exportText,
             DataGrid.InkLight, sendColor);
     }
 
     void AddCells(GameObject rowGO, string dest, string product,
-        string destStock, string target, string toSend, string srcStock,
+        string srcStock, string destStock, string target, string toSend,
         string exportText, Color nameColor, Color numColor)
     {
         var right = TMPro.HorizontalAlignmentOptions.Right;
@@ -127,10 +128,10 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
             TMPro.HorizontalAlignmentOptions.Left);
         Fixed(rowGO, "TransferRowProduct", product, 0, 30,
             TMPro.HorizontalAlignmentOptions.Left);
-        Fixed(rowGO, "TransferRowDestStock", destStock, 1, 30, numColor, right);
-        Fixed(rowGO, "TransferRowTarget", target, 2, 30, numColor, right);
-        Fixed(rowGO, "TransferRowToSend", toSend, 3, 30, numColor, right);
-        Fixed(rowGO, "TransferRowSrcStock", srcStock, 4, 30, numColor, right);
+        Fixed(rowGO, "TransferRowSrcStock", srcStock, 1, 30, numColor, right);
+        Fixed(rowGO, "TransferRowDestStock", destStock, 2, 30, numColor, right);
+        Fixed(rowGO, "TransferRowTarget", target, 3, 30, numColor, right);
+        Fixed(rowGO, "TransferRowToSend", toSend, 4, 30, numColor, right);
         Fixed(rowGO, "TransferRowExport", exportText, 5, 30, numColor, right);
     }
 

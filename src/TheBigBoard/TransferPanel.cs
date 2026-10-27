@@ -31,12 +31,18 @@ namespace TheBigBoard;
 /// the destination up, and EXPORT EXCESS (factory sources only) pins an
 /// import/export destination LAST with SELL ALL on every finished good -
 /// warehouses fill first, leftovers sell each run, nothing piles up.
+/// Editing is gated behind an opt-in toggle (default OFF, persisted per
+/// machine): while disabled the tab is read-only and the game keeps its
+/// own distribution untouched.
 /// </summary>
 public static class TransferPanel
 {
     const string FactoryBusinessType = "ba:businesstype_factory";
     const string ImportExportBusinessType = "ba:businesstype_importexport";
     const int MaxTarget = 9999999;
+    // Editing opt-in (default OFF), persisted like the column widths.
+    // FROZEN for save compat: renaming this key orphans the preference.
+    const string EditingKey = "TheBigBoard.transferEditing.v1";
 
     static ModContext _context;
     static GameObject _page;
@@ -67,8 +73,46 @@ public static class TransferPanel
     static GameObject _addProdBtnGO;
     static GameObject _exportBtnGO;
     static GameObject _createBtnGO;
+    static GameObject _editToggleBtnGO;
     static GameObject _rowMenu;
     static GameObject _modal;
+
+    static bool EditingEnabled()
+    {
+        try { return UnityEngine.PlayerPrefs.GetInt(EditingKey, 0) != 0; }
+        catch { return false; }
+    }
+
+    static void ToggleEditing()
+    {
+        bool next = !EditingEnabled();
+        try
+        {
+            UnityEngine.PlayerPrefs.SetInt(EditingKey, next ? 1 : 0);
+            UnityEngine.PlayerPrefs.Save();
+        }
+        catch { }
+        _context?.Logger.Info("The Big Board transfer editing "
+            + (next ? "ENABLED." : "DISABLED - game runs its own distribution."));
+        Refresh();
+    }
+
+    static string EditingDisabledText()
+    {
+        return "TRANSFER management is DISABLED."
+            + "\nThe game keeps running its own distribution - nothing here can change it."
+            + "\nPress ENABLE EDITING below to allow edits (amounts, destinations, exports)."
+            + "\nThe game still executes everything on its own 02:00 schedule.";
+    }
+
+    static void PaintEditToggle(bool editing)
+    {
+        if (_editToggleBtnGO == null) return;
+        var label = _editToggleBtnGO.GetComponentInChildren<TMPro.TMP_Text>(true);
+        if (label != null) label.text = editing ? "EDITING: ON" : "ENABLE EDITING";
+        var img = _editToggleBtnGO.GetComponent<Image>();
+        if (img != null) img.color = editing ? BtnIdle : Accent;
+    }
 
     public static void BuildPage(GameObject page, ModContext context)
     {
@@ -185,11 +229,13 @@ public static class TransferPanel
         bar.childForceExpandWidth = true;
         bar.childForceExpandHeight = true;
 
+        _editToggleBtnGO = MakeBarButton(barGO.transform, "ENABLE EDITING", Accent, () => ToggleEditing());
         _refreshBtnGO = MakeBarButton(barGO.transform, "REFRESH", BtnIdle, () => Refresh());
         _addDestBtnGO = MakeBarButton(barGO.transform, "ADD DEST", BtnIdle, () => OpenDestinationPicker());
         _addProdBtnGO = MakeBarButton(barGO.transform, "ADD PRODUCT", BtnIdle, () => OpenAddProductFlow());
         _exportBtnGO = MakeBarButton(barGO.transform, "EXPORT EXCESS", BtnIdle, () => ExportExcess());
         _createBtnGO = MakeBarButton(barGO.transform, "CREATE PLAN", Accent, () => CreatePlan());
+        _editToggleBtnGO.SetActive(false);
         _refreshBtnGO.SetActive(false);
         _addDestBtnGO.SetActive(false);
         _addProdBtnGO.SetActive(false);
@@ -450,6 +496,25 @@ public static class TransferPanel
         if (_table == null) return;
         bool hasSource = _selected != null;
         bool hasPlan = hasSource && _selected.plan != null;
+        bool editing = EditingEnabled();
+        if (_editToggleBtnGO != null) _editToggleBtnGO.SetActive(true);
+        PaintEditToggle(editing);
+        if (!editing)
+        {
+            if (_refreshBtnGO != null) _refreshBtnGO.SetActive(false);
+            if (_addDestBtnGO != null) _addDestBtnGO.SetActive(false);
+            if (_addProdBtnGO != null) _addProdBtnGO.SetActive(false);
+            if (_exportBtnGO != null) _exportBtnGO.SetActive(false);
+            if (_createBtnGO != null) _createBtnGO.SetActive(false);
+            if (_titleText != null)
+                _titleText.text = hasSource
+                    ? (_selected.name.ToUpperInvariant()
+                        + (_selected.isFactory ? " (FACTORY)" : " (WAREHOUSE)"))
+                    : "TRANSFER";
+            if (_snapshotText != null) _snapshotText.text = "";
+            _table.ShowInfo(EditingDisabledText(), 30);
+            return;
+        }
         if (_refreshBtnGO != null) _refreshBtnGO.SetActive(hasSource);
         if (_addDestBtnGO != null) _addDestBtnGO.SetActive(hasPlan);
         if (_addProdBtnGO != null) _addProdBtnGO.SetActive(hasPlan);
@@ -607,6 +672,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (dest == null || string.IsNullOrEmpty(itemName)) return;
             if (_selected == null || _selected.plan == null) return;
             var uis = UI.UIs.Instance;
@@ -636,6 +702,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             var plan = _selected != null ? _selected.plan : null;
             if (plan == null || dest == null || string.IsNullOrEmpty(itemName)) return;
             if (plan.destinations == null || !plan.destinations.Contains(dest)) return;
@@ -705,6 +772,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (_selected == null || _selected.plan == null || !_selected.isFactory) return;
             var plan = _selected.plan;
             if (plan.destinations == null)
@@ -812,6 +880,7 @@ public static class TransferPanel
 
     static void OpenRowMenu(TransferTable.TransferRow row, GameObject rowGO, Vector2 cursorPos)
     {
+        if (!EditingEnabled()) return;
         if (row == null || rowGO == null || row.dest == null || _page == null) return;
         if (_selected == null || _selected.plan == null) return;
         CloseOverlays();
@@ -853,6 +922,7 @@ public static class TransferPanel
 
     static void ConfirmRemoveDestination(LogisticsManagerPlanDestination dest, string destName)
     {
+        if (!EditingEnabled()) return;
         CloseOverlays();
         ShowConfirm("REMOVE DESTINATION?",
             "Remove '" + destName + "' with all its products from this plan?"
@@ -864,6 +934,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             var plan = _selected != null ? _selected.plan : null;
             if (plan == null || plan.destinations == null || dest == null) return;
             if (!plan.destinations.Contains(dest)) return;
@@ -880,7 +951,7 @@ public static class TransferPanel
 
     // ---------- modal framework: dim + card + (scroll list | body + buttons) ----------
 
-    static Transform BuildModalCard(string title, out GameObject root)
+    static Transform BuildModalCard(string title, out GameObject root, float height)
     {
         root = new GameObject("TransferModal");
         root.transform.SetParent(_page.transform, false);
@@ -900,7 +971,7 @@ public static class TransferPanel
         cardRect.anchorMin = new Vector2(0.5f, 0.5f);
         cardRect.anchorMax = new Vector2(0.5f, 0.5f);
         cardRect.pivot = new Vector2(0.5f, 0.5f);
-        cardRect.sizeDelta = new Vector2(1000f, 1200f);
+        cardRect.sizeDelta = new Vector2(1000f, height);
         var cardBg = cardGO.AddComponent<Image>();
         cardBg.color = new Color(0.12f, 0.14f, 0.18f, 1f);
         var outline = cardGO.AddComponent<Outline>();
@@ -950,7 +1021,7 @@ public static class TransferPanel
         if (_page == null) return;
         CloseOverlays();
         GameObject root;
-        var card = BuildModalCard(title, out root);
+        var card = BuildModalCard(title, out root, 1200f);
         if (options == null || options.Count == 0)
         {
             var t = Text("TransferModalEmpty", emptyText != null ? emptyText : "Nothing to pick.", 28,
@@ -1039,7 +1110,7 @@ public static class TransferPanel
     {
         if (_page == null) return;
         GameObject root;
-        var card = BuildModalCard(title, out root);
+        var card = BuildModalCard(title, out root, 520f);
         var bodyText = Text("TransferModalBody", body, 28,
             TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Top, InkLight);
         bodyText.transform.SetParent(card, false);
@@ -1065,6 +1136,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (_selected == null || _selected.plan == null) return;
             var save = SaveGameManager.Current;
             if (save == null) return;
@@ -1182,6 +1254,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (plan == null || reg == null) return;
             Address addr = null;
             try { addr = reg.Address; } catch { return; }
@@ -1215,6 +1288,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (_selected == null || _selected.plan == null) return;
             var plan = _selected.plan;
             if (plan.destinations == null || plan.destinations.Count == 0)
@@ -1246,6 +1320,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (_selected == null || _selected.plan == null || dest == null) return;
             var plan = _selected.plan;
             if (plan.destinations == null || !plan.destinations.Contains(dest)) return;
@@ -1519,6 +1594,7 @@ public static class TransferPanel
     {
         try
         {
+            if (!EditingEnabled()) return;
             if (_selected == null || _selected.plan != null) return;
             var save = SaveGameManager.Current;
             if (save == null) return;
