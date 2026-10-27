@@ -74,6 +74,10 @@ public static class ModPanel
     static int _bestRange;
     static string _bestStore; // null = ALL stores
     static int _bestDay;
+    // Live stock snapshot per product (pkey -> units on hand in own
+    // buildings). Unlike SOLD/PRODUCED it is NOT time-ranged: it shows the
+    // counts right now, at scan time.
+    static Dictionary<string, long> _bestStock = new Dictionary<string, long>();
     // Fallback unit costs (pkey -> unit cost, -1 = none): the game records
     // zero cost for own-factory goods, so profit would equal revenue.
     static readonly Dictionary<string, float> _bestFallbackCost = new Dictionary<string, float>();
@@ -2186,6 +2190,40 @@ public static class ModPanel
                 }
             }
             _bestHits = hits;
+            // Live stock snapshot per product across own buildings (same
+            // authoritative helper as the STOCK tab).
+            _bestStock = new Dictionary<string, long>();
+            try
+            {
+                var stockBuildings = new List<BuildingRegistration>();
+                try
+                {
+                    var own = Helpers.BuildingHelper.GetPlayerBuildingRegistrations(null, null);
+                    if (own != null)
+                        foreach (var reg in own)
+                            if (reg != null && !stockBuildings.Contains(reg)) stockBuildings.Add(reg);
+                }
+                catch { }
+                foreach (var reg in game.BuildingRegistrations)
+                {
+                    if (reg == null || !(reg is Entities.Warehouse)) continue;
+                    if (!stockBuildings.Contains(reg)) stockBuildings.Add(reg);
+                }
+                var rawByPkey = new Dictionary<string, string>();
+                foreach (var h in hits)
+                    if (!rawByPkey.ContainsKey(h.pkey)) rawByPkey[h.pkey] = h.raw;
+                foreach (var kv in rawByPkey)
+                {
+                    long sum = 0;
+                    foreach (var b in stockBuildings)
+                    {
+                        try { sum += Helpers.BuildingHelper.CountTotalResourcesInStock(b, kv.Value); }
+                        catch { }
+                    }
+                    if (sum != 0) _bestStock[kv.Key] = sum;
+                }
+            }
+            catch { }
             // Default to the newest range that actually has hits.
             _bestRange = 0;
             if (!BestRangeHasHits(0)) _bestRange = BestRangeHasHits(1) ? 1 : 2;
@@ -2266,11 +2304,14 @@ public static class ModPanel
             {
                 if (sp.Value > topAmt) { topAmt = sp.Value; top = sp.Key; }
             }
+            long stock = 0;
+            if (_bestStock != null) _bestStock.TryGetValue(kv.Key, out stock);
             rows.Add(new BestSellersTable.BestRow
             {
                 name = GetProductDisplayName(agg.raw),
                 sold = sold,
                 produced = agg.produced,
+                stock = stock,
                 revenue = revenue,
                 profit = revenue - cost,
                 topStore = top

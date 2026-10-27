@@ -8,7 +8,8 @@ using static TheBigBoard.DataGrid;
 namespace TheBigBoard;
 
 /// <summary>BEST SELLERS table: one row per product sold in the selected time
-/// range - units sold (retail), units produced (factories), revenue, profit
+/// range - units sold (retail), units produced (factories), live stock on hand
+/// (snapshot, not time-ranged), revenue, profit (revenue minus wholesale cost)
 /// (revenue minus wholesale cost) and the top-selling store. Like every other
 /// table it derives from TablePanel, so header sorting + resize come from the
 /// base; the owning panel (ModPanel) keeps only chrome + data fetching.</summary>
@@ -19,28 +20,31 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
         public string name;
         public long sold;
         public long produced;
+        public long stock;
         public double revenue;
         public double profit;
         public string topStore;
     }
 
     static readonly string[] HeadNames =
-        { "PRODUCT", "SOLD", "PRODUCED", "REVENUE", "PROFIT", "TOP STORE" };
+        { "PRODUCT", "SOLD", "PRODUCED", "STOCK", "REVENUE", "PROFIT", "TOP STORE" };
 
     static readonly TMPro.HorizontalAlignmentOptions[] ColAlign =
     {
         TMPro.HorizontalAlignmentOptions.Right, // SOLD
         TMPro.HorizontalAlignmentOptions.Right, // PRODUCED
+        TMPro.HorizontalAlignmentOptions.Right, // STOCK
         TMPro.HorizontalAlignmentOptions.Right, // REVENUE
         TMPro.HorizontalAlignmentOptions.Right, // PROFIT
         TMPro.HorizontalAlignmentOptions.Left, // TOP STORE (text)
     };
 
-    static readonly float[] DefaultWidths = { 150f, 160f, 180f, 180f, 300f };
+    static readonly float[] DefaultWidths = { 150f, 160f, 150f, 180f, 180f, 300f };
 
     string _totalLabel = "";
     long _totalSold;
     long _totalProduced;
+    long _totalStock;
     double _totalRevenue;
     double _totalProfit;
 
@@ -56,6 +60,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
     {
         long sold = 0;
         long produced = 0;
+        long stock = 0;
         double revenue = 0;
         double profit = 0;
         if (rows != null)
@@ -65,6 +70,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
                 if (r == null) continue;
                 sold += r.sold;
                 produced += r.produced;
+                stock += r.stock;
                 revenue += r.revenue;
                 profit += r.profit;
             }
@@ -72,6 +78,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
         _totalLabel = totalLabel ?? "";
         _totalSold = sold;
         _totalProduced = produced;
+        _totalStock = stock;
         _totalRevenue = revenue;
         _totalProfit = profit;
         SetRows(rows);
@@ -84,9 +91,10 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
         {
             case 1: c = a.sold.CompareTo(b.sold); break;
             case 2: c = a.produced.CompareTo(b.produced); break;
-            case 3: c = a.revenue.CompareTo(b.revenue); break;
-            case 4: c = a.profit.CompareTo(b.profit); break;
-            case 5: c = string.Compare(a.topStore, b.topStore, StringComparison.Ordinal); break;
+            case 3: c = a.stock.CompareTo(b.stock); break;
+            case 4: c = a.revenue.CompareTo(b.revenue); break;
+            case 5: c = a.profit.CompareTo(b.profit); break;
+            case 6: c = string.Compare(a.topStore, b.topStore, StringComparison.Ordinal); break;
             default: c = string.Compare(a.name, b.name, StringComparison.Ordinal); break;
         }
         if (c == 0) c = string.Compare(a.name, b.name, StringComparison.Ordinal);
@@ -96,7 +104,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
     protected override void RenderTotalRow(List<BestRow> rows)
     {
         var rowGO = DataGrid.AddRowRoot(RowsRoot, "BestTotalRow", DataGrid.TotalBg);
-        AddCells(rowGO, _totalLabel, _totalSold, _totalProduced,
+        AddCells(rowGO, _totalLabel, _totalSold, _totalProduced, _totalStock,
             _totalRevenue, _totalProfit, "-",
             DataGrid.ProfitGreen, DataGrid.ProfitGreen);
     }
@@ -113,16 +121,18 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
             PadR, Gap, 30, DataGrid.InkLight, right);
         DataGrid.AddFixedCell(rowGO, "BestRowProduced", r.produced.ToString("N0"), Widths, 1,
             PadR, Gap, 30, DataGrid.InkLight, right);
-        DataGrid.AddFixedCell(rowGO, "BestRowRevenue", Money(r.revenue), Widths, 2,
+        DataGrid.AddFixedCell(rowGO, "BestRowStock", r.stock.ToString("N0"), Widths, 2,
             PadR, Gap, 30, DataGrid.InkLight, right);
-        DataGrid.AddFixedCell(rowGO, "BestRowProfit", Money(r.profit), Widths, 3,
+        DataGrid.AddFixedCell(rowGO, "BestRowRevenue", Money(r.revenue), Widths, 3,
+            PadR, Gap, 30, DataGrid.InkLight, right);
+        DataGrid.AddFixedCell(rowGO, "BestRowProfit", Money(r.profit), Widths, 4,
             PadR, Gap, 30, profitColor, right);
-        DataGrid.AddFixedCell(rowGO, "BestRowTopStore", r.topStore ?? "-", Widths, 4,
+        DataGrid.AddFixedCell(rowGO, "BestRowTopStore", r.topStore ?? "-", Widths, 5,
             PadR, Gap, 28, DataGrid.InkLight,
             TMPro.HorizontalAlignmentOptions.Left);
     }
 
-    void AddCells(GameObject rowGO, string name, long sold, long produced,
+    void AddCells(GameObject rowGO, string name, long sold, long produced, long stock,
         double revenue, double profit, string topStore,
         Color nameColor, Color numColor)
     {
@@ -134,11 +144,13 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
             PadR, Gap, 30, numColor, right);
         DataGrid.AddFixedCell(rowGO, "BestTotalProduced", produced.ToString("N0"), Widths, 1,
             PadR, Gap, 30, numColor, right);
-        DataGrid.AddFixedCell(rowGO, "BestTotalRevenue", Money(revenue), Widths, 2,
+        DataGrid.AddFixedCell(rowGO, "BestTotalStock", stock.ToString("N0"), Widths, 2,
             PadR, Gap, 30, numColor, right);
-        DataGrid.AddFixedCell(rowGO, "BestTotalProfit", Money(profit), Widths, 3,
+        DataGrid.AddFixedCell(rowGO, "BestTotalRevenue", Money(revenue), Widths, 3,
             PadR, Gap, 30, numColor, right);
-        DataGrid.AddFixedCell(rowGO, "BestTotalTopStore", topStore, Widths, 4,
+        DataGrid.AddFixedCell(rowGO, "BestTotalProfit", Money(profit), Widths, 4,
+            PadR, Gap, 30, numColor, right);
+        DataGrid.AddFixedCell(rowGO, "BestTotalTopStore", topStore, Widths, 5,
             PadR, Gap, 28, numColor,
             TMPro.HorizontalAlignmentOptions.Left);
     }
