@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>TheBigBoard</AssemblyName>
+    <RootNamespace>TheBigBoard</RootNamespace>
+    <Version>0.9.0</Version>
+    <!-- Default Linux/Steam path; override on the command line if your game
+         lives elsewhere:
+         dotnet build -p:BigAmbitionsManaged="/path/to/Big Ambitions/Big Ambitions_Data/Managed" -->
+    <BigAmbitionsManaged Condition="'$(BigAmbitionsManaged)' == ''">$(HOME)/.steam/debian-installation/steamapps/common/Big Ambitions/Big Ambitions_Data/Managed</BigAmbitionsManaged>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Official mod API + game assemblies. Private=false: do NOT copy them next to our DLL. -->
+    <Reference Include="BigAmbitions.ModAPI">
+      <HintPath>$(BigAmbitionsManaged)/BigAmbitions.ModAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BigAmbitions">
+      <HintPath>$(BigAmbitionsManaged)/BigAmbitions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BigAmbitions.Items">
+      <HintPath>$(BigAmbitionsManaged)/BigAmbitions.Items.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BigAmbitions.Factories">
+      <HintPath>$(BigAmbitionsManaged)/BigAmbitions.Factories.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BigAmbitions.Characters">
+      <HintPath>$(BigAmbitionsManaged)/BigAmbitions.Characters.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="DayNightCycle">
+      <HintPath>$(BigAmbitionsManaged)/DayNightCycle.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BigAmbitionsManaged)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(BigAmbitionsManaged)/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(BigAmbitionsManaged)/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(BigAmbitionsManaged)/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="HGExtensions">
+      <HintPath>$(BigAmbitionsManaged)/HGExtensions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="HGPlugins">
+      <HintPath>$(BigAmbitionsManaged)/HGPlugins.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
