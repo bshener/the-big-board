@@ -15,7 +15,7 @@ public sealed class TheBigBoard : ModBigAmbitionsBase
 {
     public override Task OnLoadAsync(ModContext context)
     {
-        context.Logger.Info("The Big Board 0.9.0 (beta) loaded.");
+        context.Logger.Info("The Big Board 0.10.0 (beta) loaded.");
         PhoneButtonInstaller.Ensure(context);
         return Task.CompletedTask;
     }
