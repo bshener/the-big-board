@@ -105,3 +105,68 @@ Title: `The Big Board 0.10.0 beta — SALES gets a BEST SELLERS view`
 > profit = revenue. Free as always, beta as always:
 > https://steamcommunity.com/sharedfiles/filedetails/?id=3827879897
 > Screenshot of the new view on the Workshop page — feedback welcome!
+
+---
+
+## 4. Version 0.11.0 beta (DRAFTS — do NOT post without explicit approval)
+
+### 4a. Workshop changelog (paste into the Workshop update notes)
+
+```text
+0.11.0 beta — new TRANSFER tab + FACTORY plan overhaul
+
+- NEW: TRANSFER tab for inter-warehouse logistics. Per-source routes with
+  destination and product management, gradual adoption per source, and
+  opt-in editing behind a toggle — nothing moves unless you say so.
+- FACTORY plan rebuilt: columns grouped under TODAY / YESTERDAY / LAST
+  WEEK with PLAN / SELL / PROD, over-under production percent, plus
+  STOCK, SELL TODAY and SELL WEEK. Tinted group headers, sortable
+  everywhere.
+- FACTORY now shows the selected factory's own stock (not empire
+  upstream) and its warehouse fill rate in the snapshot.
+- Manufactured-goods tracking: PRODUCED uses a manufactured basis with
+  factory-inbound route gating and per-line staffed-hours auditing in the
+  plan log.
+```
+
+### 4b. Patreon update post (REQUIRED before release counts as done)
+
+Title: `The Big Board 0.11.0 beta — TRANSFER tab + FACTORY plan overhaul`
+
+> Hi everyone! Quick update on **The Big Board** (free mod, same for
+> everyone — your support buys no features, only my coffee and time).
+>
+> **0.11.0 beta is ready.** Two big things: a brand-new TRANSFER tab for
+> inter-warehouse logistics (per-source routes, destination + product
+> management, gradual adoption, opt-in editing so nothing changes by
+> accident), and a rebuilt FACTORY plan grouped under TODAY / YESTERDAY
+> / LAST WEEK with PLAN / SELL / PROD and over-under percent — plus the
+> selected factory's own stock and warehouse fill rate in view.
+>
+> Beta as always: if a number looks wrong, tell me and I'll fix it. Fresh
+> screenshots of TRANSFER + the new FACTORY plan are on the Workshop
+> page. Thank you for supporting — names go in the in-game credits
+> (`Supporters` list) with every release; this one has no new names yet,
+> so the slot is open. Be the first!
+>
+> Workshop: https://steamcommunity.com/sharedfiles/filedetails/?id=3827879897
+
+### 4c. Forum reply (post in the existing mod thread)
+
+> Quick heads-up: **0.11.0 beta** is out. New TRANSFER tab for
+> inter-warehouse logistics (per-source routes, destination/product
+> management, opt-in editing), and the FACTORY plan is rebuilt around
+> TODAY / YESTERDAY / LAST WEEK with PLAN / SELL / PROD + over-under %,
+> showing the selected factory's own stock and fill rate. Same Workshop
+> link, just update. Bug reports welcome!
+
+### 4d. Reddit (r/bigambitions — new short post)
+
+Title: `The Big Board 0.11.0 beta — new TRANSFER tab + FACTORY overhaul`
+
+> Update to my business command panel mod: new TRANSFER tab for
+> inter-warehouse logistics (per-source routes, opt-in editing), and the
+> FACTORY plan is rebuilt — TODAY / YESTERDAY / LAST WEEK groups with
+> PLAN / SELL / PROD and over-under %. Free as always, beta as always:
+> https://steamcommunity.com/sharedfiles/filedetails/?id=3827879897
+> Fresh screenshots on the Workshop page — feedback welcome!

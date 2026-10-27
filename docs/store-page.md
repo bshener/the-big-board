@@ -8,7 +8,7 @@
 > command panel for Big Ambitions: track buildings, businesses, staff,
 > factory, sales and stock in one phone app, sitting alongside the
 > vanilla apps.
-> Release version: 0.10.0 (beta) — see `docs/branding.md`.
+> Release version: 0.11.0 (beta) — see `docs/branding.md`.
 
 ---
 
@@ -29,7 +29,7 @@ The Big Board brings the numbers you check every day into one place, so you spen
 - *Who did I hire but never assign — and who's about to quit?*
 - *What sold today, in which store, and what's left on the shelves right now?*
 
-One tap on your phone. Six tabs. No more guessing.
+One tap on your phone. Seven tabs. No more guessing.
 
 [SCREENSHOT 2: phone FullMenu with The Big Board button highlighted]
 
@@ -41,7 +41,9 @@ One tap on your phone. Six tabs. No more guessing.
 
 👔 **EMPLOYEE** — one button assigns everyone you hired but never placed, to the right HR plan automatically. See who's unhappy before they quit, and order full crews through the headhunter without the paperwork pain.
 
-🏭 **FACTORY** — production plan per product (today + week) and a supply view that tells you exactly how many days of each ingredient you have left, including incoming importer deliveries. Size your next order before you run dry.
+🏭 **FACTORY** — production plan per product grouped under TODAY / YESTERDAY / LAST WEEK with PLAN / SELL / PROD and over-under percent, plus a supply view that tells you exactly how many days of each ingredient you have left, including incoming importer deliveries. Shows the selected factory's own stock and warehouse fill rate. Size your next order before you run dry.
+
+🚚 **TRANSFER** — inter-warehouse logistics management: per-source routes with destination and product management, gradual adoption per source, and opt-in editing behind a toggle so nothing changes unless you say so.
 
 💰 **SALES** — BEST SELLERS by default: per-product SOLD, PRODUCED, live STOCK, REVENUE, PROFIT and TOP STORE, with TODAY / YESTERDAY / LAST WEEK + REFRESH and an ALL + per-store filter. Every column sorts and resizes. Right-click any row for Inspect in STOCK. Prefer hunting a single product? Switch to SEARCH and see what each store sold.
 
@@ -88,6 +90,8 @@ Files in `docs/screenshots/` (game UI in English, 1920px+, Day 449 save):
 6. `06-buildings-scale.png` — BUILDINGS census, 840 known (scale proof).
 7. `07-sales-search.png` — SALES tab, SEARCH sub-tab, cloth search, TODAY/YESTERDAY/LAST WEEK.
 8. `08-best-sellers.png` — SALES tab, BEST SELLERS sub-tab (default view), TODAY, ALL stores, context menu open (Day 449 save).
-9. Optional later: GIF of typing a product name → results appearing.
+9. PENDING (0.11.0, user captures): `09-transfer.png` — TRANSFER tab, per-source route with destination + product management visible.
+10. PENDING (0.11.0, user captures): `10-factory-plan.png` — FACTORY plan, TODAY/YESTERDAY/LAST WEEK grouped headers with PLAN/SELL/PROD.
+11. Optional later: GIF of typing a product name → results appearing.
 
 Rules for all shots: real mid/late-game save (not empty test save), game UI in English, 1920px+ wide, no debug overlays. Captions under each image on Workshop (one line each).
