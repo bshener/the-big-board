@@ -786,10 +786,12 @@ public static class FactoryPanel
         return data;
     }
 
-    // Product-level STOCK (own factories + warehouses, stores excluded) and
-    // retail SELL TODAY / SELL WEEK (own stores, factories excluded: their
-    // history is production exports, not retail). Same buckets as the SALES
-    // tab: TODAY = day D (+ live paid orders), WEEK = rolling D-6..D.
+    // Product-level STOCK (THIS factory building only - the tab is
+    // per-factory, so the column matches the selected building, same as
+    // the TRANSFER tab's SRC STOCK) and retail SELL TODAY / SELL WEEK
+    // (own stores, factories excluded: their history is production
+    // exports, not retail). Same buckets as the SALES tab: TODAY = day D
+    // (+ live paid orders), WEEK = rolling D-6..D.
     static void FillProductSalesAndStock(FactoryData data)
     {
         if (data == null || data.products.Count == 0) return;
@@ -804,26 +806,26 @@ public static class FactoryPanel
             if (!byPkey.ContainsKey(p.productItem)) byPkey[p.productItem] = p;
         }
         if (byPkey.Count == 0) return;
-        var upstream = new List<BuildingRegistration>();
         var retail = new List<BuildingRegistration>();
         foreach (var reg in save.BuildingRegistrations)
         {
             if (reg == null || !reg.RentedByPlayer) continue;
-            if (reg is Entities.Warehouse) { upstream.Add(reg); continue; }
+            if (reg is Entities.Warehouse) continue;
             bool isFactory = string.Equals(reg.businessTypeName, FactoryBusinessType, StringComparison.OrdinalIgnoreCase);
-            if (isFactory) { upstream.Add(reg); continue; }
+            if (isFactory) continue;
             retail.Add(reg);
         }
-        // STOCK: authoritative helper per product x upstream building.
+        // STOCK: authoritative helper per product in THIS factory building.
         foreach (var kv in byPkey)
         {
-            long sum = 0;
-            foreach (var reg in upstream)
+            long stock = 0;
+            try
             {
-                try { sum += Helpers.BuildingHelper.CountTotalResourcesInStock(reg, kv.Key); }
-                catch { }
+                if (data.reg != null)
+                    stock = Helpers.BuildingHelper.CountTotalResourcesInStock(data.reg, kv.Key);
             }
-            kv.Value.stock = Math.Max(0, sum);
+            catch { }
+            kv.Value.stock = Math.Max(0, stock);
         }
         // SELL: retail orderHistory + today's live paid orders.
         foreach (var reg in retail)
