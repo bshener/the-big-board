@@ -2302,6 +2302,16 @@ public static class ModPanel
             int prod = 0;
             foreach (var h in hits) { if (h.produced) prod++; else sales++; }
             context?.Logger.Info("The Big Board best sellers scan: day " + _bestDay + ", range " + _bestRange + ", " + sales + " sales hits + " + prod + " production hits (factory recipes: " + recipeOutputs.Count + ").");
+            try
+            {
+                var imports = Manufactured.DescribeActiveImports();
+                if (imports == null || imports.Count == 0)
+                    context?.Logger.Info("The Big Board imports: none active.");
+                else
+                    foreach (var line in imports)
+                        context?.Logger.Info("The Big Board " + line);
+            }
+            catch { }
         }
         catch (System.Exception ex)
         {

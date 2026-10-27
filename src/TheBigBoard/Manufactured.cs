@@ -77,9 +77,77 @@ public static class Manufactured
 
     public sealed class Gates
     {
+        // Products with real outside inflow in the current+last calendar
+        // week. A dormant partnership (zero ordered) does NOT block.
         public readonly HashSet<string> Imported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public readonly HashSet<string> Wholesaled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public readonly HashSet<string> ExportRouted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>One audit line per active import partnership + product:
+    /// who brings what, how much, where to, when next. Lets inflow
+    /// questions ("are we importing popcorn?") be answered from Player.log.
+    /// </summary>
+    public static List<string> DescribeActiveImports()
+    {
+        var lines = new List<string>();
+        try
+        {
+            var save = SaveGameManager.Current;
+            if (save == null || save.importPartnerships == null) return lines;
+            foreach (var partnership in save.importPartnerships)
+            {
+                if (partnership == null || !partnership.isActive) continue;
+                string addr = "?";
+                try
+                {
+                    if (partnership.importAddress != null)
+                        addr = partnership.importAddress.streetName + " " + partnership.importAddress.streetNumber;
+                }
+                catch { }
+                string id = "?";
+                try { id = partnership.id ?? "?"; }
+                catch { }
+                int next = -1;
+                try { next = partnership.nextDeliveryDay; }
+                catch { }
+                bool repeating = false;
+                try { repeating = partnership.isRepeatingOrder; }
+                catch { }
+                if (partnership.products == null || partnership.products.Count == 0)
+                {
+                    lines.Add("import [" + id + "] from " + addr
+                        + " nextDay=" + next + (repeating ? " repeating" : " one-shot")
+                        + ": no products");
+                    continue;
+                }
+                foreach (var product in partnership.products)
+                {
+                    if (product == null || string.IsNullOrEmpty(product.itemName)) continue;
+                    int amount = 0, tw = 0, lw = 0;
+                    string wh = "?";
+                    try { amount = product.amount; }
+                    catch { }
+                    try { tw = product.amountOrderedThisWeek; }
+                    catch { }
+                    try { lw = product.amountOrderedLastWeek; }
+                    catch { }
+                    try
+                    {
+                        if (product.assignedWarehouse != null)
+                            wh = product.assignedWarehouse.streetName + " " + product.assignedWarehouse.streetNumber;
+                    }
+                    catch { }
+                    lines.Add("import [" + id + "] from " + addr
+                        + " nextDay=" + next + (repeating ? " repeating" : " one-shot")
+                        + ": " + product.itemName
+                        + " amount=" + amount + " orderedTW=" + tw + " orderedLW=" + lw
+                        + " warehouse=" + wh);
+                }
+            }
+        }
+        catch { }
+        return lines;
     }
 
     public static Gates BuildGates()
@@ -98,7 +166,12 @@ public static class Manufactured
                     foreach (var product in partnership.products)
                     {
                         if (product == null || string.IsNullOrEmpty(product.itemName)) continue;
-                        gates.Imported.Add(product.itemName);
+                        int tw = 0, lw = 0;
+                        try { tw = product.amountOrderedThisWeek; }
+                        catch { }
+                        try { lw = product.amountOrderedLastWeek; }
+                        catch { }
+                        if (tw > 0 || lw > 0) gates.Imported.Add(product.itemName);
                     }
                 }
             }
@@ -506,6 +579,14 @@ public static class Manufactured
             r.Basis = "fallback:shared-warehouse-flow";
             return r;
         }
+        bool inboundRoute = false;
+        try { inboundRoute = HasFactoryInboundRoute(factoryReg, pkey); }
+        catch { }
+        if (inboundRoute)
+        {
+            r.Basis = "fallback:factory-inbound-route";
+            return r;
+        }
         long sEnd = 0;
         if (liveEnd)
         {
@@ -552,6 +633,47 @@ public static class Manufactured
     {
         if (factoryReg == null || string.IsNullOrEmpty(pkey)) return false;
         return ProducerCount(pkey) == 1;
+    }
+
+    /// <summary>True when a logistics route delivers the product INTO the
+    /// given factory (warehouse->factory). Such inbound flow inflates the
+    /// factory's stock delta without production, so manufactured for that
+    /// factory+product is unattributable while the route exists.</summary>
+    public static bool HasFactoryInboundRoute(BuildingRegistration factoryReg, string pkey)
+    {
+        if (factoryReg == null || string.IsNullOrEmpty(pkey)) return false;
+        try
+        {
+            var save = SaveGameManager.Current;
+            if (save == null || save.logisticsManagerPlans == null) return false;
+            string fstreet = null;
+            int fnum = 0;
+            try { fstreet = factoryReg.StreetName; fnum = factoryReg.StreetNumber; }
+            catch { return false; }
+            if (string.IsNullOrEmpty(fstreet)) return false;
+            foreach (var plan in save.logisticsManagerPlans)
+            {
+                if (plan == null || plan.destinations == null) continue;
+                foreach (var dest in plan.destinations)
+                {
+                    if (dest == null || dest.stockTargets == null) continue;
+                    if (dest.deliveryTargetAddress == null) continue;
+                    if (dest.deliveryTargetAddress.streetName == null) continue;
+                    if (!string.Equals(dest.deliveryTargetAddress.streetName, fstreet, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (dest.deliveryTargetAddress.streetNumber != fnum) continue;
+                    foreach (var st in dest.stockTargets)
+                    {
+                        if (st == null || string.IsNullOrEmpty(st.itemName)) continue;
+                        if (st.targetAmount <= 0) continue;
+                        if (string.Equals(st.itemName, pkey, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
     }
 
     /// <summary>True when at least one own factory has the product in a
