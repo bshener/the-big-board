@@ -105,6 +105,9 @@ public static class FactoryPanel
         public int lines;
         public long today;
         public long week;
+        public long stock; // upstream on-hand (own factories + warehouses, stores excluded)
+        public long sellToday; // retail units sold today (orderHistory + live orders)
+        public long sellWeek; // retail units sold in rolling 7 days (D-6..D)
     }
 
     public sealed class SupplyRow
@@ -763,7 +766,96 @@ public static class FactoryPanel
         foreach (var kv in materialNeed) data.materialNeed[kv.Key] = kv.Value;
         foreach (var kv in ReadFactoryStorage(reg)) data.factoryStock[kv.Key] = kv.Value;
         data.supplyReady = false;
+        FillProductSalesAndStock(data);
         return data;
+    }
+
+    // Product-level STOCK (own factories + warehouses, stores excluded) and
+    // retail SELL TODAY / SELL WEEK (own stores, factories excluded: their
+    // history is production exports, not retail). Same buckets as the SALES
+    // tab: TODAY = day D (+ live paid orders), WEEK = rolling D-6..D.
+    static void FillProductSalesAndStock(FactoryData data)
+    {
+        if (data == null || data.products.Count == 0) return;
+        var save = SaveGameManager.Current;
+        if (save == null || save.BuildingRegistrations == null) return;
+        int today = data.day;
+        var byPkey = new Dictionary<string, ProductRow>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in data.products)
+        {
+            if (p == null || string.IsNullOrEmpty(p.productItem)) continue;
+            if (p.productItem == "__NORECIPE__") continue;
+            if (!byPkey.ContainsKey(p.productItem)) byPkey[p.productItem] = p;
+        }
+        if (byPkey.Count == 0) return;
+        var upstream = new List<BuildingRegistration>();
+        var retail = new List<BuildingRegistration>();
+        foreach (var reg in save.BuildingRegistrations)
+        {
+            if (reg == null || !reg.RentedByPlayer) continue;
+            if (reg is Entities.Warehouse) { upstream.Add(reg); continue; }
+            bool isFactory = string.Equals(reg.businessTypeName, FactoryBusinessType, StringComparison.OrdinalIgnoreCase);
+            if (isFactory) { upstream.Add(reg); continue; }
+            retail.Add(reg);
+        }
+        // STOCK: authoritative helper per product x upstream building.
+        foreach (var kv in byPkey)
+        {
+            long sum = 0;
+            foreach (var reg in upstream)
+            {
+                try { sum += Helpers.BuildingHelper.CountTotalResourcesInStock(reg, kv.Key); }
+                catch { }
+            }
+            kv.Value.stock = Math.Max(0, sum);
+        }
+        // SELL: retail orderHistory + today's live paid orders.
+        foreach (var reg in retail)
+        {
+            try
+            {
+                if (reg.orderHistory != null)
+                {
+                    foreach (var entry in reg.orderHistory)
+                    {
+                        if (entry == null || entry.itemSales == null) continue;
+                        bool isToday = entry.dayNumber == today;
+                        bool inWeek = entry.dayNumber > today - 7 && entry.dayNumber <= today;
+                        if (!isToday && !inWeek) continue;
+                        foreach (var rep in entry.itemSales)
+                        {
+                            if (rep == null || rep.itemName == null || rep.amountSold <= 0) continue;
+                            ProductRow row;
+                            if (!byPkey.TryGetValue(rep.itemName, out row)) continue;
+                            if (isToday) row.sellToday += rep.amountSold;
+                            if (inWeek) row.sellWeek += rep.amountSold;
+                        }
+                    }
+                }
+            }
+            catch { }
+            try
+            {
+                var live = reg.unprocessedCompletedOrders;
+                if (live != null)
+                {
+                    foreach (var order in live)
+                    {
+                        if (order == null || !order.completed || order.entries == null) continue;
+                        foreach (var e in order.entries)
+                        {
+                            if (e == null || e.itemName == null) continue;
+                            if (!e.available || !e.priceAccceptable || !e.paid) continue;
+                            ProductRow row;
+                            if (!byPkey.TryGetValue(e.itemName, out row)) continue;
+                            row.sellToday += 1;
+                            row.sellWeek += 1;
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
     }
 
     static long PlanToday(FactoryWorkstationInstance ws, Recipe recipe)
