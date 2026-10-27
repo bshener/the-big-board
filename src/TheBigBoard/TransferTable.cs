@@ -11,10 +11,11 @@ namespace TheBigBoard;
 /// <summary>TRANSFER table: one row per (destination x product) route in the
 /// selected logistics plan. DESTINATION + PRODUCT on the left, DEST STOCK
 /// (current units at the target), MIN STOCK (the plan target: click a row
-/// to edit it, 0 removes the product), TO SEND (what the next run - or
-/// DELIVER NOW - will move: max(0, target - destStock), clamped by source
+/// to edit it, 0 removes the product), TO SEND (what the game's next
+/// logistics run will move: max(0, target - destStock), clamped by source
 /// stock; for exporter destinations min(target, sourceStock) since export
-/// sells a fixed amount), SRC STOCK (units available at the source) and
+/// sells a fixed amount - nothing here runs immediately, the game executes
+/// on its own schedule), SRC STOCK (units available at the source) and
 /// EXPORT $ (expected revenue for exporter rows).</summary>
 public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
 {
@@ -46,6 +47,11 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
     static readonly float[] DefaultWidths = { 170f, 150f, 105f, 105f, 105f, 105f };
 
     public Action<TransferRow> OnEdit;
+    public Action<TransferRow, GameObject, Vector2> OnMenu;
+
+    /// <summary>Target at/above this renders as ALL: the config-only export
+    /// flush (matches TransferPanel.MaxTarget).</summary>
+    const int SellAllThreshold = 9999999;
 
     string _totalLabel = "";
     long _totalSend;
@@ -101,9 +107,12 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
         string exportText = r.exporter
             ? (ExportValue(r) > 0 ? ExportValue(r).ToString("N0") : "0")
             : "-";
+        // SELL ALL (config-only export flush) reads better than 9,999,999.
+        string targetText = (r.exporter && r.target >= SellAllThreshold)
+            ? "ALL" : r.target.ToString("N0");
         Color sendColor = r.toSend > 0 ? DataGrid.ProfitGreen : DataGrid.InkGrey;
         AddCells(rowGO, r.destName, r.productName,
-            r.destStock.ToString("N0"), r.target.ToString("N0"),
+            r.destStock.ToString("N0"), targetText,
             r.toSend.ToString("N0"), r.srcStock.ToString("N0"), exportText,
             DataGrid.InkLight, sendColor);
     }
@@ -159,6 +168,20 @@ public sealed class TransferTable : TablePanel<TransferTable.TransferRow>
         try
         {
             if (OnEdit != null) OnEdit(row);
+        }
+        catch { }
+    }
+
+    protected override bool RowRightClickable(TransferRow row)
+    {
+        return true;
+    }
+
+    protected override void OnRowRightClicked(TransferRow row, GameObject rowGO, Vector2 pos)
+    {
+        try
+        {
+            if (OnMenu != null) OnMenu(row, rowGO, pos);
         }
         catch { }
     }

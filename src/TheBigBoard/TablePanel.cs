@@ -285,6 +285,13 @@ public abstract class TablePanel<TRow>
                 var captured = r;
                 DataGrid.AddRowClick(rowGO, () => OnRowClicked(captured));
             }
+            if (RowRightClickable(r))
+            {
+                var capturedR = r;
+                var capturedGO = rowGO;
+                DataGrid.AddRowRightClick(capturedGO,
+                    (pos) => OnRowRightClicked(capturedR, capturedGO, pos));
+            }
             stripe++;
         }
     }
@@ -336,6 +343,15 @@ public abstract class TablePanel<TRow>
     }
 
     protected virtual void OnRowClicked(TRow row)
+    {
+    }
+
+    protected virtual bool RowRightClickable(TRow row)
+    {
+        return false;
+    }
+
+    protected virtual void OnRowRightClicked(TRow row, GameObject rowGO, Vector2 pos)
     {
     }
 }

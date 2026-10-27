@@ -23,7 +23,9 @@ namespace TheBigBoard;
 /// Tab 3: placeholder.
 /// TRANSFER tab: all factory/warehouse logistics plans as (destination x
 /// product) routes with dest stock, min-stock target (click to edit) and
-/// computed TO SEND, plus DELIVER NOW and factory EXPORT EXCESS actions.
+/// computed TO SEND, plus add/remove destinations and products and a
+/// persistent factory EXPORT EXCESS setup. Config-only: the game itself
+/// executes on its logistics schedule, nothing here delivers instantly.
 /// Lives under FullMenu.appsContainer.
 /// </summary>
 public static class ModPanel
@@ -210,6 +212,7 @@ public static class ModPanel
         if (_panel.activeSelf)
         {
             menu.Toggle(false);
+            TransferPanel.CloseOverlays();
             FactoryPanel.SetVisible(false);
             EmployeePanel.SetVisible(false);
             BuildingsPanel.SetVisible(false);
@@ -1383,6 +1386,7 @@ public static class ModPanel
     static void SelectTab(int index)
     {
         CloseBestMenu();
+        TransferPanel.CloseOverlays();
         for (int i = 0; i < 7; i++)
         {
             if (_tabLabels[i] != null) _tabLabels[i].color = i == index ? TabActive : TabIdle;
