@@ -59,6 +59,7 @@ public static class ModPanel
     static GameObject _salesBestView;
     static readonly Image[] _salesSubTabBgs = new Image[2];
     static readonly TMPro.TMP_Text[] _salesSubTabLabels = new TMPro.TMP_Text[2];
+    static TMPro.TMP_Text _salesHintLabel; // right-click discoverability hint
     static ModContext _salesContext;
 
     // --- BEST SELLERS state: flat hit list (retail sales with money +
@@ -112,6 +113,7 @@ public static class ModPanel
     // current stock in the player's own buildings (warehouses, factories,
     // stores) instead of order history. No time filter.
     static TMPro.TMP_Text _stockQueryText;
+    static GameObject _stockQueryHint;
     static TMPro.TMP_Text _stockMatchText;
     static StockTable _stockTable;
     static Transform _stockProductList;
@@ -515,6 +517,7 @@ public static class ModPanel
         Anchor(_stockQueryText.gameObject, 0f, 0f, 1f, 1f, 30f, 10f, -30f, -10f);
         var queryHint = Text("StockQueryHint", "Product name... (e.g. cloth)", 34, TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, InkGrey);
         queryHint.transform.SetParent(inputGO.transform, false);
+        _stockQueryHint = queryHint.gameObject;
         Anchor(queryHint.gameObject, 0f, 0f, 1f, 1f, 30f, 10f, -30f, -10f);
         var inputBtn = inputGO.AddComponent<Button>();
         inputBtn.targetGraphic = inputBg;
@@ -1797,6 +1800,15 @@ public static class ModPanel
             _salesSubTabLabels[i] = label;
             btn.onClick.AddListener(() => SelectSalesSubTab(index));
         }
+        // Discoverability: right-click is invisible otherwise. Sits in the
+        // empty right half of the sub-tab row; only shown on BEST SELLERS.
+        _salesHintLabel = Text("SalesHintLabel", "Right-click a product for actions", 26,
+            TMPro.HorizontalAlignmentOptions.Right,
+            TMPro.VerticalAlignmentOptions.Middle, InkGrey);
+        _salesHintLabel.transform.SetParent(page.transform, false);
+        Anchor(_salesHintLabel.gameObject, 1f, 1f, 1f, 1f, -1100f, -88f, -20f, 0f);
+        _salesHintLabel.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+        _salesHintLabel.overflowMode = TMPro.TextOverflowModes.Ellipsis;
     }
 
     static void SelectSalesSubTab(int index)
@@ -1823,6 +1835,7 @@ public static class ModPanel
             _salesSubTabBgs[i].color = sel ? Accent : RowBgAlt;
             _salesSubTabLabels[i].color = sel ? Color.white : InkLight;
         }
+        if (_salesHintLabel != null) _salesHintLabel.gameObject.SetActive(_salesSubTab == 0);
     }
 
     static void BuildBestView(GameObject page, ModContext context)
@@ -1860,14 +1873,6 @@ public static class ModPanel
         refreshSize.flexibleWidth = 1f;
         refreshSize.minHeight = 60f;
         refreshBtn.onClick.AddListener(() => DoBestScan(_salesContext));
-        var hintLabel = Text("BestHintLabel", "Right-click a product for actions", 22,
-            TMPro.HorizontalAlignmentOptions.Center,
-            TMPro.VerticalAlignmentOptions.Middle, InkGrey);
-        hintLabel.transform.SetParent(_bestPillBar.transform, false);
-        Stretch(hintLabel.gameObject);
-        var hintSize = hintLabel.gameObject.AddComponent<LayoutElement>();
-        hintSize.preferredWidth = 480f;
-        hintSize.flexibleWidth = 0f;
 
         // Store filter strip (same bordered-card pattern as the search view).
         var filterCardGO = new GameObject("BestStoreFilterCard");
@@ -2010,7 +2015,7 @@ public static class ModPanel
     // list entries here.
     static GameObject _bestMenu;
 
-    public static void OpenBestRowMenu(BestSellersTable.BestRow row, GameObject rowGO)
+    public static void OpenBestRowMenu(BestSellersTable.BestRow row, GameObject rowGO, Vector2 cursorPos)
     {
         if (row == null || rowGO == null || _salesBestView == null) return;
         CloseBestMenu();
@@ -2020,7 +2025,7 @@ public static class ModPanel
         items.Add(new KeyValuePair<string, Action>("Inspect in STOCK",
             () => InspectBestInStock(pkey, raw)));
         _bestMenu = DataGrid.ShowContextMenu(_salesBestView.transform, rowGO,
-            row.name, items, () => { _bestMenu = null; });
+            row.name, items, () => { _bestMenu = null; }, cursorPos);
         if (_salesContext != null)
             _salesContext.Logger.Info("The Big Board best sellers menu: '" + row.name + "'.");
     }
@@ -2041,6 +2046,7 @@ public static class ModPanel
         string label = GetProductDisplayName(rawItemId);
         _stockExactKey = pkey;
         if (_stockQueryText != null) _stockQueryText.text = label;
+        if (_stockQueryHint != null) _stockQueryHint.SetActive(false);
         if (_stockMatchText != null) { _stockMatchText.gameObject.SetActive(true); _stockMatchText.text = "Searching '" + label + "'..."; }
         _stockTable.ShowInfo("Searching '" + label + "'...", 32);
         CloseBestMenu();

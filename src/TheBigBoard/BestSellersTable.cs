@@ -49,6 +49,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
     long _totalStock;
     double _totalRevenue;
     double _totalProfit;
+    int _renderStripe; // render-order stripe counter (hover restore color)
 
     public BestSellersTable()
         : base("bestsellers", HeadNames, DefaultWidths, ColAlign, 80f, 80f, 10f,
@@ -105,6 +106,7 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
 
     protected override void RenderTotalRow(List<BestRow> rows)
     {
+        _renderStripe = 0;
         var rowGO = DataGrid.AddRowRoot(RowsRoot, "BestTotalRow", DataGrid.TotalBg);
         AddCells(rowGO, _totalLabel, _totalSold, _totalProduced, _totalStock,
             _totalRevenue, _totalProfit, "-",
@@ -132,7 +134,10 @@ public sealed class BestSellersTable : TablePanel<BestSellersTable.BestRow>
         DataGrid.AddFixedCell(rowGO, "BestRowTopStore", r.topStore ?? "-", Widths, 5,
             PadR, Gap, 28, DataGrid.InkLight,
             TMPro.HorizontalAlignmentOptions.Left);
-        DataGrid.AddRowRightClick(rowGO, () => ModPanel.OpenBestRowMenu(r, rowGO));
+        DataGrid.AddRowRightClick(rowGO, (pos) => ModPanel.OpenBestRowMenu(r, rowGO, pos));
+        Color baseCol = _renderStripe % 2 == 0 ? DataGrid.RowBg : DataGrid.RowBgAlt;
+        _renderStripe++;
+        DataGrid.AddRowHover(rowGO, baseCol, new Color(0.32f, 0.37f, 0.44f, 1f));
     }
 
     void AddCells(GameObject rowGO, string name, long sold, long produced, long stock,

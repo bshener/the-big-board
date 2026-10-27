@@ -315,7 +315,7 @@ public static class DataGrid
 
     // ---------- context menu (right-click actions on rows) ----------
 
-    public static void AddRowRightClick(GameObject rowGO, Action onRightClick)
+    public static void AddRowRightClick(GameObject rowGO, Action<Vector2> onRightClick)
     {
         if (rowGO == null || onRightClick == null) return;
         // Buttons only fire on left click; an EventTrigger sees the right
@@ -328,10 +328,33 @@ public static class DataGrid
             var pd = data as PointerEventData;
             if (pd != null && pd.button == PointerEventData.InputButton.Right)
             {
-                try { onRightClick(); } catch { }
+                try { onRightClick(pd.position); } catch { }
             }
         });
         trigger.triggers.Add(entry);
+    }
+
+    public static void AddRowHover(GameObject rowGO, Color normal, Color hover)
+    {
+        // Hover tint signals "this row is interactive". Coexists with the
+        // click/right-click triggers on the same row.
+        if (rowGO == null) return;
+        var img = rowGO.GetComponent<Image>();
+        if (img == null) return;
+        var trigger = rowGO.GetComponent<EventTrigger>();
+        if (trigger == null) trigger = rowGO.AddComponent<EventTrigger>();
+        var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        enter.callback.AddListener((data) =>
+        {
+            try { img.color = hover; } catch { }
+        });
+        trigger.triggers.Add(enter);
+        var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        exit.callback.AddListener((data) =>
+        {
+            try { img.color = normal; } catch { }
+        });
+        trigger.triggers.Add(exit);
     }
 
     /// <summary>Generic right-click menu: title + one button per action.
@@ -340,7 +363,8 @@ public static class DataGrid
     /// at the anchor row's right edge, clamped inside the parent (row world
     /// position keeps this camera-independent).</summary>
     public static GameObject ShowContextMenu(Transform parent, GameObject anchorRow,
-        string title, List<KeyValuePair<string, Action>> items, Action onClose)
+        string title, List<KeyValuePair<string, Action>> items, Action onClose,
+        Vector2? cursorScreenPos = null)
     {
         var root = new GameObject("ContextMenu");
         root.transform.SetParent(parent, false);
@@ -428,18 +452,47 @@ public static class DataGrid
                 });
             }
         }
+        // Position: at the mouse cursor (menu top-left), clamped inside the
+        // parent. The canvas camera (null on overlay canvases) keeps this
+        // correct in both render modes; falls back to the anchor row when
+        // the conversion fails.
         try
         {
             var parentRect = parent as RectTransform;
-            if (parentRect != null && anchorRow != null)
+            if (parentRect != null)
             {
-                Vector3 local = parentRect.InverseTransformPoint(anchorRow.transform.position);
                 Canvas.ForceUpdateCanvases();
                 float h = menuRect.rect.height;
                 if (h <= 0) h = 200f;
                 var pr = parentRect.rect;
-                float mx = local.x + 40f;
-                float my = local.y + 40f;
+                Vector2 cursor = Vector2.zero;
+                bool haveCursor = false;
+                try
+                {
+                    if (cursorScreenPos.HasValue)
+                    {
+                        var canvas = parent.GetComponentInParent<Canvas>();
+                        Camera cam = canvas != null ? canvas.worldCamera : null;
+                        haveCursor = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                            parentRect, cursorScreenPos.Value, cam, out cursor);
+                    }
+                }
+                catch { haveCursor = false; }
+                float mx;
+                float my;
+                if (haveCursor)
+                {
+                    mx = cursor.x + 16f;
+                    my = cursor.y - 16f;
+                }
+                else
+                {
+                    Vector3 local = anchorRow != null
+                        ? (Vector3)parentRect.InverseTransformPoint(anchorRow.transform.position)
+                        : Vector3.zero;
+                    mx = local.x + 40f;
+                    my = local.y + 40f;
+                }
                 mx = Mathf.Min(Mathf.Max(mx, pr.xMin + 8f), pr.xMax - menuWidth - 8f);
                 my = Mathf.Min(Mathf.Max(my, pr.yMin + h + 8f), pr.yMax - 8f);
                 menuRect.anchoredPosition = new Vector2(mx, my);
