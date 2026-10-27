@@ -282,9 +282,9 @@ public static class FactoryPanel
     {
         _planTable = new PlanTable();
         _planTable.Init(_context);
-        _planTable.BuildHeader(view, "PlanHeader", 0f, 0f, -56f, 0f);
+        _planTable.BuildHeader(view, "PlanHeader", -52f, 0f, -108f, -52f);
         _planTable.BuildRows(view,
-            "RowsScroll", "Viewport", "Rows", "Scrollbar", -64f);
+            "RowsScroll", "Viewport", "Rows", "Scrollbar", -116f);
     }
 
     static void BuildSupplyView(GameObject view)

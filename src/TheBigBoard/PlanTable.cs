@@ -36,9 +36,14 @@ public sealed class PlanTable : TablePanel<FactoryPanel.ProductRow>
 
     static readonly float[] DefaultWidths = { 130f, 220f, 220f, 160f, 160f, 160f, 160f, 160f, 160f, 120f, 120f, 120f }; // LINES, TODAY, WEEK, STOCK, SELL-T, SELL-W, PROD-T, PROD-Y, PROD-W, DIFF-T, DIFF-Y, DIFF-W
 
+    static readonly DataGrid.GroupDef[] GroupDefs =
+    {
+        new DataGrid.GroupDef("PROD vs SELL", 9, 3),
+    };
+
     public PlanTable()
         : base("factoryPlan", HeadNames, DefaultWidths, ColAlign, 40f, 40f, 12f,
-            26, null, -1, true)
+            26, GroupDefs, -1, true)
     {
     }
 
