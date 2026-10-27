@@ -74,6 +74,9 @@ public static class ModPanel
     static int _bestRange;
     static string _bestStore; // null = ALL stores
     static int _bestDay;
+    // Fallback unit costs (pkey -> unit cost, -1 = none): the game records
+    // zero cost for own-factory goods, so profit would equal revenue.
+    static readonly Dictionary<string, float> _bestFallbackCost = new Dictionary<string, float>();
 
     sealed class BestHit
     {
@@ -1960,6 +1963,30 @@ public static class ModPanel
         }
     }
 
+    // Fallback unit cost for sales the game records with zero cost
+    // (own-factory goods: their stock pricePerUnit is 0). Mirrors the game's
+    // own repair basis: ItemHelper.GetWholesalePrice, else DefaultMarketPrice.
+    static float BestFallbackUnitCost(string pkey, string rawItemId)
+    {
+        float cached;
+        if (_bestFallbackCost.TryGetValue(pkey, out cached))
+            return cached < 0 ? 0 : cached;
+        float unit = 0;
+        try
+        {
+            var item = BigAmbitions.Items.ItemsGetter.GetByName(rawItemId);
+            if (item != null)
+            {
+                unit = ItemHelper.GetWholesalePrice(item);
+                if (float.IsNaN(unit) || unit <= 0) unit = item.DefaultMarketPrice;
+                if (float.IsNaN(unit) || unit < 0) unit = 0;
+            }
+        }
+        catch { unit = 0; }
+        _bestFallbackCost[pkey] = unit > 0 ? unit : -1f;
+        return unit > 0 ? unit : 0;
+    }
+
     static void DoBestScan(ModContext context)
     {
         if (_bestTable == null) return;
@@ -1978,6 +2005,7 @@ public static class ModPanel
             var game = SaveGameManager.Current;
             if (game == null || game.BuildingRegistrations == null) return;
             _bestDay = game.Day;
+            _bestFallbackCost.Clear();
             // Factory recipe outputs: products the player's own factories can
             // make (workstation SelectedRecipe.output). Warehouse arrivals of
             // these products are the game's only day-stamped record of actual
@@ -2038,15 +2066,25 @@ public static class ModPanel
                             }
                             else
                             {
+                                // Services and own-factory goods carry no
+                                // recorded cost (wholesalePrice 0): services
+                                // stay at 0, factory-recipe products fall back
+                                // to the game's own wholesale basis.
+                                string pkey = report.itemName.ToLowerInvariant();
+                                double cost = report.totalWholesalePrice;
+                                if (!(cost > 0))
+                                    cost = recipeOutputs.Contains(pkey)
+                                        ? BestFallbackUnitCost(pkey, report.itemName) * report.amountSold
+                                        : 0;
                                 hits.Add(new BestHit
                                 {
-                                    pkey = report.itemName.ToLowerInvariant(),
+                                    pkey = pkey,
                                     raw = report.itemName,
                                     store = name,
                                     day = entry.dayNumber,
                                     amt = report.amountSold,
                                     revenue = report.totalPrice,
-                                    cost = report.totalWholesalePrice,
+                                    cost = cost,
                                     produced = false
                                 });
                             }
@@ -2069,15 +2107,21 @@ public static class ModPanel
                                 {
                                     if (e == null || e.itemName == null) continue;
                                     if (!e.available || !e.priceAccceptable || !e.paid) continue;
+                                    string pkey = e.itemName.ToLowerInvariant();
+                                    double cost = e.wholesalePrice;
+                                    if (!(cost > 0))
+                                        cost = recipeOutputs.Contains(pkey)
+                                            ? BestFallbackUnitCost(pkey, e.itemName)
+                                            : 0;
                                     hits.Add(new BestHit
                                     {
-                                        pkey = e.itemName.ToLowerInvariant(),
+                                        pkey = pkey,
                                         raw = e.itemName,
                                         store = name,
                                         day = _bestDay,
                                         amt = 1,
                                         revenue = e.price,
-                                        cost = e.wholesalePrice,
+                                        cost = cost,
                                         produced = false
                                     });
                                 }
