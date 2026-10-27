@@ -475,7 +475,7 @@ public static class ModPanel
         _salesTable.ShowInfo("Type a product name and press SEARCH.", 30);
 
         BuildBestView(page, context);
-        RefreshSalesSubTabStyles();
+        SelectSalesSubTab(0);
     }
 
     static void BuildStockPage(GameObject page, ModContext context)
@@ -1766,14 +1766,14 @@ public static class ModPanel
 
     static void BuildSalesSubTabs(GameObject page)
     {
-        string[] names = { "SEARCH", "BEST SELLERS" };
+        string[] names = { "BEST SELLERS", "SEARCH" };
         for (int i = 0; i < 2; i++)
         {
             int index = i;
             var tabGO = new GameObject("SalesSubTab" + i);
             tabGO.transform.SetParent(page.transform, false);
             Anchor(tabGO, 0f, 1f, 0f, 1f,
-                i == 0 ? 0f : 330f, -88f, i == 0 ? 310f : 700f, 0f);
+                i == 0 ? 0f : 390f, -88f, i == 0 ? 370f : 700f, 0f);
             var bg = tabGO.AddComponent<Image>();
             bg.color = RowBgAlt;
             var btn = tabGO.AddComponent<Button>();
@@ -1794,13 +1794,13 @@ public static class ModPanel
         if (index < 0 || index > 1) return;
         _salesSubTab = index;
         RefreshSalesSubTabStyles();
-        if (_salesSearchView != null) _salesSearchView.SetActive(index == 0);
-        if (_salesBestView != null) _salesBestView.SetActive(index == 1);
+        if (_salesSearchView != null) _salesSearchView.SetActive(index == 1);
+        if (_salesBestView != null) _salesBestView.SetActive(index == 0);
         // Lazy first scan: opening BEST SELLERS aggregates everything once;
         // pills + store tabs afterwards only re-aggregate the cached hits.
-        if (index == 1 && _bestHits == null) DoBestScan(_salesContext);
+        if (index == 0 && _bestHits == null) DoBestScan(_salesContext);
         if (_lastContext != null)
-            _lastContext.Logger.Info("The Big Board sales view: " + (index == 0 ? "SEARCH" : "BEST SELLERS"));
+            _lastContext.Logger.Info("The Big Board sales view: " + (index == 0 ? "BEST SELLERS" : "SEARCH"));
     }
 
     static void RefreshSalesSubTabStyles()
@@ -1978,8 +1978,33 @@ public static class ModPanel
             var game = SaveGameManager.Current;
             if (game == null || game.BuildingRegistrations == null) return;
             _bestDay = game.Day;
+            // Factory recipe outputs: products the player's own factories can
+            // make (workstation SelectedRecipe.output). Warehouse arrivals of
+            // these products are the game's only day-stamped record of actual
+            // production: outputs go straight to shelves, and factory history
+            // only keeps consumed-ingredient costs with amount 0.
+            var recipeOutputs = new HashSet<string>();
+            foreach (var reg in game.BuildingRegistrations)
+            {
+                if (reg == null || reg.itemInstances == null) continue;
+                if (!string.Equals(reg.businessTypeName, FactoryBusinessType, StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var inst in reg.itemInstances.Values)
+                {
+                    var ws = inst as FactoryWorkstationInstance;
+                    if (ws == null) continue;
+                    try
+                    {
+                        var recipe = ws.SelectedRecipe;
+                        if ((UnityEngine.Object)recipe == null) continue;
+                        if (string.IsNullOrEmpty(recipe.output.item)) continue;
+                        recipeOutputs.Add(recipe.output.item.ToLowerInvariant());
+                    }
+                    catch { }
+                }
+            }
             // Full unfiltered hit list: retail sales carry money (revenue +
-            // cost), factory history + live exports carry production only.
+            // cost), factory history + live exports + warehouse arrivals of
+            // recipe outputs carry production.
             var hits = new List<BestHit>();
             foreach (var reg in game.BuildingRegistrations)
             {
@@ -2085,6 +2110,37 @@ public static class ModPanel
                 }
                 catch { }
             }
+            // Production arrivals: warehouse deliveryTransactions IN of
+            // factory-recipe products (day-stamped). Imports/wholesale goods
+            // pass through the same transactions, so a product that is both
+            // produced and bought in can read high - the game keeps no origin.
+            foreach (var reg in game.BuildingRegistrations)
+            {
+                var wh = reg as Entities.Warehouse;
+                if (wh == null || wh.deliveryTransactions == null) continue;
+                string whName = !string.IsNullOrEmpty(reg.BusinessName)
+                    ? reg.BusinessName
+                    : (reg.StreetName + " " + reg.StreetNumber);
+                foreach (var tx in wh.deliveryTransactions)
+                {
+                    if (tx == null || tx.deliveryItems == null) continue;
+                    foreach (var di in tx.deliveryItems)
+                    {
+                        if (di == null || di.itemName == null || di.amountDelivered <= 0) continue;
+                        string pkey = di.itemName.ToLowerInvariant();
+                        if (!recipeOutputs.Contains(pkey)) continue;
+                        hits.Add(new BestHit
+                        {
+                            pkey = pkey,
+                            raw = di.itemName,
+                            store = whName,
+                            day = tx.dayOfDelivery,
+                            amt = di.amountDelivered,
+                            produced = true
+                        });
+                    }
+                }
+            }
             _bestHits = hits;
             // Default to the newest range that actually has hits.
             _bestRange = 0;
@@ -2095,7 +2151,7 @@ public static class ModPanel
             int sales = 0;
             int prod = 0;
             foreach (var h in hits) { if (h.produced) prod++; else sales++; }
-            context?.Logger.Info("The Big Board best sellers scan: day " + _bestDay + ", range " + _bestRange + ", " + sales + " sales hits + " + prod + " production hits.");
+            context?.Logger.Info("The Big Board best sellers scan: day " + _bestDay + ", range " + _bestRange + ", " + sales + " sales hits + " + prod + " production hits (factory recipes: " + recipeOutputs.Count + ").");
         }
         catch (System.Exception ex)
         {
