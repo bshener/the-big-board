@@ -7,7 +7,8 @@ sitting alongside the vanilla apps. *"Your empire, on one board."*
 - 🏢 **BUILDINGS** — census of every known building, with filters and sorting
 - 🏪 **BUSINESSES** — per-shop health checklist, one-click hiring, dead-hours analysis, schedule copy
 - 🧑‍💼 **EMPLOYEE** — one-click HR assign + crew recruiting
-- 🏭 **FACTORY** — production plan + supply coverage
+- 🏭 **FACTORY** — production plan (TODAY/YESTERDAY/LAST WEEK, PLAN/SELL/PROD) + supply coverage
+- 🚚 **TRANSFER** — inter-warehouse logistics management
 - 💰 **SALES** — BEST SELLERS (sold/produced/stock/revenue/profit/top store) + per-store search
 - 📦 **STOCK** — live stock with IN/OUT flows
 
@@ -16,7 +17,7 @@ sitting alongside the vanilla apps. *"Your empire, on one board."*
 - **Steam Workshop:** [subscribe](https://steamcommunity.com/sharedfiles/filedetails/?id=3827879897), then enable the mod from the in-game mod menu.
 - **Nexus Mods:** [download](https://www.nexusmods.com/bigambitions/mods/35), drop it into your local mods folder.
 
-Current version: **v0.10.0 beta** — bug reports welcome, every one gets read.
+Current version: **v0.11.0 beta** — bug reports welcome, every one gets read.
 
 ## Support
 

@@ -35,7 +35,7 @@ public static class ModPanel
     const string PanelName = "TheBigBoardPanel";
     // Display version (keep in sync with the csproj) + supporter names
     // (Patreon/BMC tiers). Updated with every release.
-    const string ModVersion = "0.10.0 beta";
+    const string ModVersion = "0.11.0 beta";
     static readonly string[] Supporters = { };
     static string SupportersLine()
     {
