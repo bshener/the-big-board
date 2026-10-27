@@ -619,6 +619,24 @@ public static class FactoryPanel
         if (_cardToday != null) _cardToday.text = _data.totalToday.ToString("N0");
         if (_cardWeek != null) _cardWeek.text = _data.totalWeek.ToString("N0");
         _planTable.SetRows(_data.products);
+        // Per-product audit line: plan vs upstream stock vs retail sales.
+        // Lets plan/actual gaps (e.g. popcorn) be diagnosed from Player.log
+        // alone, without asking the player for the on-screen numbers.
+        try
+        {
+            if (_context != null && _data.products != null)
+            {
+                foreach (var p in _data.products)
+                {
+                    if (p == null) continue;
+                    _context.Logger.Info("The Big Board factory plan [" + _data.name + "]: "
+                        + p.productName + " lines=" + p.lines
+                        + " planT=" + p.today + " planW=" + p.week
+                        + " stock=" + p.stock + " sellT=" + p.sellToday + " sellW=" + p.sellWeek);
+                }
+            }
+        }
+        catch { }
     }
 
     static void RenderSupply()
@@ -648,6 +666,23 @@ public static class FactoryPanel
             _cardShortfall.color = _data.shortfallItems > 0 ? WarnRed : ProfitGreen;
         }
         _supplyTable.SetRows(_data.supply);
+        // Shortfall audit lines: only items actually short, so the log stays
+        // small while material starvation is diagnosable from Player.log.
+        try
+        {
+            if (_context != null && _data.supply != null)
+            {
+                foreach (var s in _data.supply)
+                {
+                    if (s == null || s.shortfall <= 0) continue;
+                    _context.Logger.Info("The Big Board factory shortfall [" + _data.name + "]: "
+                        + s.displayName + " needWk=" + s.needWk
+                        + " inFactory=" + s.inFactory + " incoming=" + s.incoming
+                        + " days=" + s.days.ToString("F1") + " shortfall=" + s.shortfall);
+                }
+            }
+        }
+        catch { }
     }
 
     // ---------- data ----------
