@@ -71,7 +71,7 @@ public sealed class PhoneButtonInstaller : MonoBehaviour
         // Freshness watchdog: new day recomputes the factory plan, a new
         // hour re-runs the supply count while SUPPLY is open (~2s cadence).
         // StockHistory snapshots day-boundary stocks for our movement ledger.
-        if (++_tickFrames % 120 == 0) { FactoryPanel.Tick(); StockHistory.Tick(); EmployeePanel.Tick(); BuildingsPanel.Tick(); BusinessesPanel.Tick(); }
+        if (++_tickFrames % 120 == 0) { FactoryPanel.Tick(); StockHistory.Tick(); EmployeePanel.Tick(); BuildingsPanel.Tick(); BusinessesPanel.Tick(); TransferPanel.Tick(); }
         // Unity null-check: destroyed button becomes null, reinstall then.
         if (_button == null)
         {

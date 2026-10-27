@@ -21,6 +21,9 @@ namespace TheBigBoard;
 /// other buildings OUT from orderHistory (+ today's live paid orders),
 /// IN untracked there (game keeps no inbound history per store).
 /// Tab 3: placeholder.
+/// TRANSFER tab: all factory/warehouse logistics plans as (destination x
+/// product) routes with dest stock, min-stock target (click to edit) and
+/// computed TO SEND, plus DELIVER NOW and factory EXPORT EXCESS actions.
 /// Lives under FullMenu.appsContainer.
 /// </summary>
 public static class ModPanel
@@ -37,9 +40,9 @@ public static class ModPanel
         return "v" + ModVersion + " - thanks: " + string.Join(", ", Supporters);
     }
     static GameObject _panel;
-    static GameObject[] _pages = new GameObject[6];
-    static GameObject[] _tabUnderlines = new GameObject[6];
-    static TMPro.TMP_Text[] _tabLabels = new TMPro.TMP_Text[6];
+    static GameObject[] _pages = new GameObject[7];
+    static GameObject[] _tabUnderlines = new GameObject[7];
+    static TMPro.TMP_Text[] _tabLabels = new TMPro.TMP_Text[7];
     static TMPro.TMP_Text _queryText;
     static TMPro.TMP_Text _matchText;
     static SalesTable _salesTable;
@@ -283,8 +286,8 @@ public static class ModPanel
         layout.childControlWidth = true;
         layout.childControlHeight = true;
 
-        string[] tabNames = { "BUILDINGS", "BUSINESSES", "EMPLOYEE", "FACTORY", "SALES", "STOCK" };
-        for (int i = 0; i < 6; i++)
+        string[] tabNames = { "BUILDINGS", "BUSINESSES", "EMPLOYEE", "FACTORY", "SALES", "STOCK", "TRANSFER" };
+        for (int i = 0; i < 7; i++)
         {
             int index = i; // capture
             var tab = new GameObject($"Tab{i + 1}");
@@ -294,7 +297,7 @@ public static class ModPanel
             var btn = tab.AddComponent<Button>();
             btn.targetGraphic = hit;
             var size = tab.AddComponent<LayoutElement>();
-            size.preferredWidth = 270f;
+            size.preferredWidth = 225f;
 
             var label = Text($"Tab{i + 1}Label", tabNames[i], 30, TMPro.HorizontalAlignmentOptions.Left, TMPro.VerticalAlignmentOptions.Middle, i == 0 ? TabActive : TabIdle);
             label.transform.SetParent(tab.transform, false);
@@ -318,7 +321,7 @@ public static class ModPanel
             btn.onClick.AddListener(() => SelectTab(index));
         }
 
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 7; i++)
         {
             var page = new GameObject($"Page{i + 1}");
             page.transform.SetParent(_panel.transform, false);
@@ -332,6 +335,7 @@ public static class ModPanel
         FactoryPanel.BuildPage(_pages[3], context);
         BuildSalesPage(_pages[4], context);
         BuildStockPage(_pages[5], context);
+        TransferPanel.BuildPage(_pages[6], context);
     }
 
     static void BuildPlaceholderPage(GameObject page, string title, string body)
@@ -1379,7 +1383,7 @@ public static class ModPanel
     static void SelectTab(int index)
     {
         CloseBestMenu();
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 7; i++)
         {
             if (_tabLabels[i] != null) _tabLabels[i].color = i == index ? TabActive : TabIdle;
             if (_tabUnderlines[i] != null) _tabUnderlines[i].SetActive(i == index);
@@ -1393,6 +1397,8 @@ public static class ModPanel
         if (index == 0) BuildingsPanel.Refresh();
         BusinessesPanel.SetVisible(index == 1);
         if (index == 1) BusinessesPanel.Refresh();
+        TransferPanel.SetVisible(index == 6);
+        if (index == 6) TransferPanel.Refresh();
     }
 
     static void OpenSearchDialog(ModContext context, TMPro.TMP_Text hint)
