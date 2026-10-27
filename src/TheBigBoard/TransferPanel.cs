@@ -31,18 +31,20 @@ namespace TheBigBoard;
 /// the destination up, and EXPORT EXCESS (factory sources only) pins an
 /// import/export destination LAST with SELL ALL on every finished good -
 /// warehouses fill first, leftovers sell each run, nothing piles up.
-/// Editing is gated behind an opt-in toggle (default OFF, persisted per
-/// machine): while disabled the tab is read-only and the game keeps its
-/// own distribution untouched.
+/// Sources are adopted one by one (default: every source stays
+/// game-managed): only an adopted factory/warehouse can be edited here.
+/// Adoption is persisted per machine, so the mod takes over gradually -
+/// one source at a time, never the whole empire at install.
 /// </summary>
 public static class TransferPanel
 {
     const string FactoryBusinessType = "ba:businesstype_factory";
     const string ImportExportBusinessType = "ba:businesstype_importexport";
     const int MaxTarget = 9999999;
-    // Editing opt-in (default OFF), persisted like the column widths.
-    // FROZEN for save compat: renaming this key orphans the preference.
-    const string EditingKey = "TheBigBoard.transferEditing.v1";
+    // Per-source opt-in (default OFF for every source), persisted like the
+    // column widths. FROZEN for save compat: renaming this prefix orphans
+    // the preferences.
+    const string AdoptPrefix = "TheBigBoard.transferSrc.v1.";
 
     static ModContext _context;
     static GameObject _page;
@@ -73,45 +75,63 @@ public static class TransferPanel
     static GameObject _addProdBtnGO;
     static GameObject _exportBtnGO;
     static GameObject _createBtnGO;
-    static GameObject _editToggleBtnGO;
+    static GameObject _adoptBtnGO;
     static GameObject _rowMenu;
     static GameObject _modal;
 
-    static bool EditingEnabled()
+    static string SourceKey(BuildingRegistration reg)
     {
-        try { return UnityEngine.PlayerPrefs.GetInt(EditingKey, 0) != 0; }
+        try
+        {
+            if (reg == null) return null;
+            return (reg.StreetName != null ? reg.StreetName : "") + "#" + reg.StreetNumber;
+        }
+        catch { return null; }
+    }
+
+    static bool IsAdopted(SourceEntry entry)
+    {
+        try
+        {
+            if (entry == null || entry.reg == null) return false;
+            string key = SourceKey(entry.reg);
+            if (string.IsNullOrEmpty(key)) return false;
+            return UnityEngine.PlayerPrefs.GetInt(AdoptPrefix + key, 0) != 0;
+        }
         catch { return false; }
     }
 
-    static void ToggleEditing()
+    static void SetAdopted(SourceEntry entry, bool adopted)
     {
-        bool next = !EditingEnabled();
+        if (entry == null) return;
         try
         {
-            UnityEngine.PlayerPrefs.SetInt(EditingKey, next ? 1 : 0);
+            string key = SourceKey(entry.reg);
+            if (string.IsNullOrEmpty(key)) return;
+            UnityEngine.PlayerPrefs.SetInt(AdoptPrefix + key, adopted ? 1 : 0);
             UnityEngine.PlayerPrefs.Save();
         }
         catch { }
-        _context?.Logger.Info("The Big Board transfer editing "
-            + (next ? "ENABLED." : "DISABLED - game runs its own distribution."));
+        _context?.Logger.Info("The Big Board transfer [" + entry.name + "]: "
+            + (adopted ? "ADOPTED - managed here." : "RELEASED - back to the game's own distribution."));
         Refresh();
     }
 
-    static string EditingDisabledText()
+    static string AdoptDisabledText()
     {
-        return "TRANSFER management is DISABLED."
-            + "\nThe game keeps running its own distribution - nothing here can change it."
-            + "\nPress ENABLE EDITING below to allow edits (amounts, destinations, exports)."
+        return "This source is MANAGED BY THE GAME."
+            + "\nOur transfer system hasn't touched it - amounts, destinations and exports are all vanilla."
+            + "\nPress MANAGE THIS SOURCE below to take it over (only this factory/warehouse, nothing else)."
             + "\nThe game still executes everything on its own 02:00 schedule.";
     }
 
-    static void PaintEditToggle(bool editing)
+    static void PaintAdoptButton(bool adopted)
     {
-        if (_editToggleBtnGO == null) return;
-        var label = _editToggleBtnGO.GetComponentInChildren<TMPro.TMP_Text>(true);
-        if (label != null) label.text = editing ? "EDITING: ON" : "ENABLE EDITING";
-        var img = _editToggleBtnGO.GetComponent<Image>();
-        if (img != null) img.color = editing ? BtnIdle : Accent;
+        if (_adoptBtnGO == null) return;
+        var label = _adoptBtnGO.GetComponentInChildren<TMPro.TMP_Text>(true);
+        if (label != null) label.text = adopted ? "MANAGING: ON" : "MANAGE THIS SOURCE";
+        var img = _adoptBtnGO.GetComponent<Image>();
+        if (img != null) img.color = adopted ? BtnIdle : Accent;
     }
 
     public static void BuildPage(GameObject page, ModContext context)
@@ -229,13 +249,13 @@ public static class TransferPanel
         bar.childForceExpandWidth = true;
         bar.childForceExpandHeight = true;
 
-        _editToggleBtnGO = MakeBarButton(barGO.transform, "ENABLE EDITING", Accent, () => ToggleEditing());
+        _adoptBtnGO = MakeBarButton(barGO.transform, "MANAGE THIS SOURCE", Accent, () => SetAdopted(_selected, !IsAdopted(_selected)));
         _refreshBtnGO = MakeBarButton(barGO.transform, "REFRESH", BtnIdle, () => Refresh());
         _addDestBtnGO = MakeBarButton(barGO.transform, "ADD DEST", BtnIdle, () => OpenDestinationPicker());
         _addProdBtnGO = MakeBarButton(barGO.transform, "ADD PRODUCT", BtnIdle, () => OpenAddProductFlow());
         _exportBtnGO = MakeBarButton(barGO.transform, "EXPORT EXCESS", BtnIdle, () => ExportExcess());
         _createBtnGO = MakeBarButton(barGO.transform, "CREATE PLAN", Accent, () => CreatePlan());
-        _editToggleBtnGO.SetActive(false);
+        _adoptBtnGO.SetActive(false);
         _refreshBtnGO.SetActive(false);
         _addDestBtnGO.SetActive(false);
         _addProdBtnGO.SetActive(false);
@@ -474,8 +494,9 @@ public static class TransferPanel
             string routes = entry.plan != null
                 ? (entry.plan.destinations != null ? entry.plan.destinations.Count.ToString() : "0") + " routes"
                 : "no plan";
+            string managed = IsAdopted(entry) ? "ON" : "OFF";
             var label = Text("TransferSourceLabel",
-                entry.name + "\n" + kind + "  |  " + routes, 26,
+                entry.name + "\n" + kind + "  |  " + routes + "  |  " + managed, 26,
                 TMPro.HorizontalAlignmentOptions.Center, TMPro.VerticalAlignmentOptions.Middle,
                 sel ? Color.white : InkLight);
             label.transform.SetParent(go.transform, false);
@@ -496,10 +517,10 @@ public static class TransferPanel
         if (_table == null) return;
         bool hasSource = _selected != null;
         bool hasPlan = hasSource && _selected.plan != null;
-        bool editing = EditingEnabled();
-        if (_editToggleBtnGO != null) _editToggleBtnGO.SetActive(true);
-        PaintEditToggle(editing);
-        if (!editing)
+        bool adopted = IsAdopted(_selected);
+        if (_adoptBtnGO != null) _adoptBtnGO.SetActive(true);
+        PaintAdoptButton(adopted);
+        if (!adopted)
         {
             if (_refreshBtnGO != null) _refreshBtnGO.SetActive(false);
             if (_addDestBtnGO != null) _addDestBtnGO.SetActive(false);
@@ -512,7 +533,7 @@ public static class TransferPanel
                         + (_selected.isFactory ? " (FACTORY)" : " (WAREHOUSE)"))
                     : "TRANSFER";
             if (_snapshotText != null) _snapshotText.text = "";
-            _table.ShowInfo(EditingDisabledText(), 30);
+            _table.ShowInfo(AdoptDisabledText(), 30);
             return;
         }
         if (_refreshBtnGO != null) _refreshBtnGO.SetActive(hasSource);
@@ -672,7 +693,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (dest == null || string.IsNullOrEmpty(itemName)) return;
             if (_selected == null || _selected.plan == null) return;
             var uis = UI.UIs.Instance;
@@ -702,7 +723,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             var plan = _selected != null ? _selected.plan : null;
             if (plan == null || dest == null || string.IsNullOrEmpty(itemName)) return;
             if (plan.destinations == null || !plan.destinations.Contains(dest)) return;
@@ -772,7 +793,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (_selected == null || _selected.plan == null || !_selected.isFactory) return;
             var plan = _selected.plan;
             if (plan.destinations == null)
@@ -880,7 +901,7 @@ public static class TransferPanel
 
     static void OpenRowMenu(TransferTable.TransferRow row, GameObject rowGO, Vector2 cursorPos)
     {
-        if (!EditingEnabled()) return;
+        if (!IsAdopted(_selected)) return;
         if (row == null || rowGO == null || row.dest == null || _page == null) return;
         if (_selected == null || _selected.plan == null) return;
         CloseOverlays();
@@ -922,7 +943,7 @@ public static class TransferPanel
 
     static void ConfirmRemoveDestination(LogisticsManagerPlanDestination dest, string destName)
     {
-        if (!EditingEnabled()) return;
+        if (!IsAdopted(_selected)) return;
         CloseOverlays();
         ShowConfirm("REMOVE DESTINATION?",
             "Remove '" + destName + "' with all its products from this plan?"
@@ -934,7 +955,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             var plan = _selected != null ? _selected.plan : null;
             if (plan == null || plan.destinations == null || dest == null) return;
             if (!plan.destinations.Contains(dest)) return;
@@ -1136,7 +1157,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (_selected == null || _selected.plan == null) return;
             var save = SaveGameManager.Current;
             if (save == null) return;
@@ -1254,7 +1275,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (plan == null || reg == null) return;
             Address addr = null;
             try { addr = reg.Address; } catch { return; }
@@ -1288,7 +1309,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (_selected == null || _selected.plan == null) return;
             var plan = _selected.plan;
             if (plan.destinations == null || plan.destinations.Count == 0)
@@ -1320,7 +1341,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (_selected == null || _selected.plan == null || dest == null) return;
             var plan = _selected.plan;
             if (plan.destinations == null || !plan.destinations.Contains(dest)) return;
@@ -1594,7 +1615,7 @@ public static class TransferPanel
     {
         try
         {
-            if (!EditingEnabled()) return;
+            if (!IsAdopted(_selected)) return;
             if (_selected == null || _selected.plan != null) return;
             var save = SaveGameManager.Current;
             if (save == null) return;

@@ -26,6 +26,8 @@ namespace TheBigBoard;
 /// computed TO SEND, plus add/remove destinations and products and a
 /// persistent factory EXPORT EXCESS setup. Config-only: the game itself
 /// executes on its logistics schedule, nothing here delivers instantly.
+/// Sources are adopted one by one (default game-managed), so the mod
+/// never takes over the whole distribution at install.
 /// Lives under FullMenu.appsContainer.
 /// </summary>
 public static class ModPanel
