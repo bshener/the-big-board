@@ -96,6 +96,9 @@ public static class FactoryPanel
         public string productName;
         public long today;
         public long week;
+        public int hoursToday; // staffed hours counted in today (audit)
+        public int hoursWeek; // staffed hours counted in week (audit)
+        public int rate; // units/hour at current skill (audit)
     }
 
     public sealed class ProductRow
@@ -761,8 +764,20 @@ public static class FactoryPanel
                     try { created = ws.CreatedItemName; }
                     catch { created = null; }
                     line.productName = GetProductDisplayName(string.IsNullOrEmpty(created) ? outputItem : created);
-                    line.today = PlanToday(ws, recipe);
-                    line.week = PlanWeek(reg, ws, recipe, materialNeed);
+                    int hT = 0, hW = 0, rT = 0, rW = 0;
+                    line.today = PlanToday(ws, recipe, out hT, out rT);
+                    line.week = PlanWeek(reg, ws, recipe, materialNeed, out hW, out rW);
+                    line.hoursToday = hT;
+                    line.hoursWeek = hW;
+                    line.rate = rT > rW ? rT : rW;
+                    try
+                    {
+                        if (_context != null && line.productItem != "__NORECIPE__")
+                            _context.Logger.Info("The Big Board factory line [" + data.name + "]: "
+                                + line.productName + " hoursT=" + hT + " planT=" + line.today
+                                + " hoursW=" + hW + " planW=" + line.week + " maxRate=" + line.rate);
+                    }
+                    catch { }
                 }
             }
             if (line.productItem == null)
@@ -947,9 +962,12 @@ public static class FactoryPanel
         catch { }
     }
 
-    static long PlanToday(FactoryWorkstationInstance ws, Recipe recipe)
+    static long PlanToday(FactoryWorkstationInstance ws, Recipe recipe,
+        out int staffedHours, out int maxRate)
     {
         long planned = 0;
+        staffedHours = 0;
+        maxRate = 0;
         List<WorkShift> shifts;
         try { shifts = ItemHelper.GetTodayWorkShifts(ws); }
         catch { return 0; }
@@ -969,14 +987,19 @@ public static class FactoryPanel
             try { scaled = Math.Max(0, recipe.GetScaledOutputAmount(emp.GetSkillValue(SkillFactoryWorker))); }
             catch { continue; }
             planned += (long)hours * scaled;
+            staffedHours += hours;
+            if (scaled > maxRate) maxRate = scaled;
         }
         return planned;
     }
 
     static long PlanWeek(BuildingRegistration reg, FactoryWorkstationInstance ws,
-        Recipe recipe, Dictionary<string, long> materialNeed)
+        Recipe recipe, Dictionary<string, long> materialNeed,
+        out int staffedHours, out int maxRate)
     {
         long planned = 0;
+        staffedHours = 0;
+        maxRate = 0;
         if (reg.scheduleDays == null) return 0;
         string wsId = null;
         try { wsId = ws.id; }
@@ -1001,6 +1024,8 @@ public static class FactoryPanel
                 try { scaled = Math.Max(0, recipe.GetScaledOutputAmount(emp.GetSkillValue(SkillFactoryWorker))); }
                 catch { continue; }
                 planned += (long)hours * scaled;
+                staffedHours += hours;
+                if (scaled > maxRate) maxRate = scaled;
                 try
                 {
                     if (recipe.ingredients != null)
