@@ -13,7 +13,8 @@ namespace TheBigBoard;
 /// TAB 3 - FACTORY. Left: own factory list. Right, two sub-views:
 /// PRODUCTION PLAN: per-product merged rows (all lines making the same
 /// product collapse into one row) with PLAN TODAY (0-24h staffed schedule)
-/// and PLAN WEEK columns.
+/// and PLAN WEEK columns. The header snapshot also shows the selected
+/// factory's warehouse fill (pallet-shelf slots used/total + stored units).
 /// SUPPLY: per-ingredient NEED/WK, FACTORY stock, INCOMING
 /// (importer deliveries due in the next 7 days), DAYS of coverage and
 /// SHORTFALL - so the next importer order can be sized in advance.
@@ -87,6 +88,9 @@ public static class FactoryPanel
         public long totalNeed;
         public long totalIncoming;
         public int shortfallItems;
+        public int storageUsedSlots;
+        public int storageTotalSlots;
+        public long storageUnits;
     }
 
     sealed class LinePlan
@@ -385,6 +389,7 @@ public static class FactoryPanel
 
     /// <summary>Called every ~2s from the bootstrap. A new day recomputes
     /// the plan; a new hour re-runs the warehouse count while SUPPLY is open.
+    /// Storage fill refreshes live every tick (cheap one-building scan).
     /// Also picks up factories bought while the panel is open.</summary>
     public static void Tick()
     {
@@ -409,6 +414,21 @@ public static class FactoryPanel
             }
             if (_view == 1 && _data.supplyReady && (day != _data.supplyDay || hour != _data.supplyHour))
                 StartSupplyCompute();
+            try
+            {
+                if (_selected != null && _snapshotText != null)
+                {
+                    int usedSlots, totalSlots;
+                    long units;
+                    ReadStorageStats(_selected, out usedSlots, out totalSlots, out units);
+                    _data.storageUsedSlots = usedSlots;
+                    _data.storageTotalSlots = totalSlots;
+                    _data.storageUnits = units;
+                    _data.hour = hour;
+                    _snapshotText.text = "Snapshot: Day " + _data.day + " - " + hour.ToString("00") + ":00" + StorageSuffix(_data);
+                }
+            }
+            catch { }
         }
         catch (Exception ex)
         {
@@ -445,7 +465,7 @@ public static class FactoryPanel
             _planCache[_selected] = _data;
             RenderAll();
             if (_view == 1) StartSupplyCompute();
-            _context?.Logger.Info("The Big Board factory refresh: " + _factories.Count + " factories, " + _data.lines.Count + " lines in " + (int)((Time.realtimeSinceStartup - planStart) * 1000) + "ms.");
+            _context?.Logger.Info("The Big Board factory refresh: " + _factories.Count + " factories, " + _data.lines.Count + " lines in " + (int)((Time.realtimeSinceStartup - planStart) * 1000) + "ms. storage [" + _data.name + "]: " + _data.storageUsedSlots + "/" + _data.storageTotalSlots + " slots, " + _data.storageUnits.ToString("N0") + " units.");
         }
         catch (Exception ex)
         {
@@ -604,7 +624,7 @@ public static class FactoryPanel
         }
         if (_titleText != null) _titleText.text = _data.name;
         if (_snapshotText != null)
-            _snapshotText.text = "Snapshot: Day " + _data.day + " - " + _data.hour.ToString("00") + ":00";
+            _snapshotText.text = "Snapshot: Day " + _data.day + " - " + _data.hour.ToString("00") + ":00" + StorageSuffix(_data);
         RenderPlan();
         RenderSupply();
     }
@@ -824,6 +844,12 @@ public static class FactoryPanel
         // slow and runs later in SupplyCoroutine, only for the SUPPLY view.
         foreach (var kv in materialNeed) data.materialNeed[kv.Key] = kv.Value;
         foreach (var kv in ReadFactoryStorage(reg)) data.factoryStock[kv.Key] = kv.Value;
+        int usedSlots, totalSlots;
+        long units;
+        ReadStorageStats(reg, out usedSlots, out totalSlots, out units);
+        data.storageUsedSlots = usedSlots;
+        data.storageTotalSlots = totalSlots;
+        data.storageUnits = units;
         data.supplyReady = false;
         FillProductSalesAndStock(data);
         return data;
@@ -1071,6 +1097,53 @@ public static class FactoryPanel
         }
         catch { }
         return stock;
+    }
+
+    // Warehouse fill for the selected factory: pallet-shelf slots are the
+    // binding limit (production stops when slots are full:
+    // cargoInstances.Count >= ItemCached.cargoCapacity), so the ratio is
+    // used/total slots plus total stored units for scale.
+    static void ReadStorageStats(BuildingRegistration reg, out int usedSlots, out int totalSlots, out long units)
+    {
+        usedSlots = 0;
+        totalSlots = 0;
+        units = 0;
+        try
+        {
+            if (reg == null || reg.itemInstances == null) return;
+            int tag = BigAmbitions.Tags.TagRef.Itemtag.iswarehousestorage;
+            foreach (var inst in reg.itemInstances.Values)
+            {
+                if (inst == null) continue;
+                BigAmbitions.Items.Item cached = null;
+                try { cached = inst.ItemCached; }
+                catch { continue; }
+                if ((UnityEngine.Object)cached == null) continue;
+                bool tagged = false;
+                try { tagged = cached.HasTag(tag); }
+                catch { continue; }
+                if (!tagged) continue;
+                try { totalSlots += Math.Max(0, cached.cargoCapacity); }
+                catch { }
+                if (inst.cargoInstances == null) continue;
+                foreach (var c in inst.cargoInstances)
+                {
+                    if (c == null) continue;
+                    usedSlots++;
+                    try { if (c.amount > 0) units += c.amount; }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
+    static string StorageSuffix(FactoryData data)
+    {
+        if (data == null || data.storageTotalSlots <= 0)
+            return "  |  Storage: no shelves";
+        int pct = (int)Math.Round(data.storageUsedSlots * 100.0 / data.storageTotalSlots);
+        return "  |  Storage " + pct + "% (" + data.storageUsedSlots + "/" + data.storageTotalSlots + " slots, " + data.storageUnits.ToString("N0") + " units)";
     }
 
     static Dictionary<string, long> ReadIncoming(Dictionary<string, long> materialNeed, int today)
