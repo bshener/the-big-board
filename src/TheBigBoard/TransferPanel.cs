@@ -310,9 +310,40 @@ public static class TransferPanel
             if (save == null) return;
             _lastDay = save.Day;
             try { _lastHour = save.Hour; } catch { }
+            // Keep the user's selection across rebuilds: ReadSources creates
+            // fresh wrappers, so reference equality would always miss and
+            // fall back to the first source. Match the same building instead.
+            BuildingRegistration keepReg = null;
+            string keepKey = null;
+            try
+            {
+                if (_selected != null)
+                {
+                    keepReg = _selected.reg;
+                    keepKey = SourceKey(_selected.reg);
+                }
+            }
+            catch { }
             ReadSources(save);
-            if (_selected == null || !_sources.Contains(_selected))
-                _selected = _sources.Count > 0 ? _sources[0] : null;
+            SourceEntry reselected = null;
+            if (keepReg != null || keepKey != null)
+            {
+                foreach (var s in _sources)
+                {
+                    if (s == null || s.reg == null) continue;
+                    bool same = false;
+                    try { same = keepReg != null && s.reg == keepReg; } catch { }
+                    if (!same && keepKey != null)
+                    {
+                        try { same = string.Equals(SourceKey(s.reg), keepKey, StringComparison.Ordinal); }
+                        catch { }
+                    }
+                    if (same) { reselected = s; break; }
+                }
+            }
+            _selected = reselected != null
+                ? reselected
+                : (_sources.Count > 0 ? _sources[0] : null);
             BuildSourceList();
             RenderDetail();
             int plans = 0;
