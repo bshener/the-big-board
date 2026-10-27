@@ -87,7 +87,8 @@ public sealed class DeadHoursTable : TablePanel<DeadHoursTable.Row>
             PadL, PadR, Gap, 30, color, align);
     }
 
-    TMPro.TextMeshProUGUI Fixed(GameObject parent, string goName, string value,
+    // Hides TablePanel.Fixed on purpose: first two columns right, rest centered.
+    new TMPro.TextMeshProUGUI Fixed(GameObject parent, string goName, string value,
         int index, Color color)
     {
         return DataGrid.AddFixedCell(parent, goName, value, Widths, index,

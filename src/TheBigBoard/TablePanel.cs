@@ -242,6 +242,21 @@ public abstract class TablePanel<TRow>
         return t != null ? t.GetComponent<TMPro.TextMeshProUGUI>() : null;
     }
 
+    /// <summary>Shared row-cell helpers (were copy-pasted in every table):
+    /// name text left, fixed-width numbers right, 30pt. Tables with their
+    /// own alignment needs keep local overloads.</summary>
+    protected TMPro.TextMeshProUGUI NameCell(GameObject parent, string goName, string value, Color color)
+    {
+        return DataGrid.AddNameCell(parent, goName, value, Widths,
+            PadL, PadR, Gap, 30, color, TMPro.HorizontalAlignmentOptions.Left);
+    }
+
+    protected TMPro.TextMeshProUGUI Fixed(GameObject parent, string goName, string value, int index, Color color)
+    {
+        return DataGrid.AddFixedCell(parent, goName, value, Widths, index,
+            PadR, Gap, 30, color, TMPro.HorizontalAlignmentOptions.Right);
+    }
+
     // ---------- to be provided by each table ----------
 
     protected abstract int CompareRows(TRow a, TRow b, int col);

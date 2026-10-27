@@ -85,13 +85,10 @@ public sealed class ShopPickTable : TablePanel<ShopPickTable.Row>
         get { return "No shops found."; }
     }
 
-    TMPro.TextMeshProUGUI NameCell(GameObject parent, string goName, string value, Color color)
-    {
-        return DataGrid.AddNameCell(parent, goName, value, Widths,
-            PadL, PadR, Gap, 30, color, TMPro.HorizontalAlignmentOptions.Left);
-    }
+    // Name cells come from the TablePanel base (shared NameCell).
 
-    TMPro.TextMeshProUGUI Fixed(GameObject parent, string goName, string value, int index, Color color)
+    // Hides TablePanel.Fixed on purpose: first column left (text), rest right.
+    new TMPro.TextMeshProUGUI Fixed(GameObject parent, string goName, string value, int index, Color color)
     {
         // Row cells align like the rest of the mod: text left, numbers right.
         var align = index == 0

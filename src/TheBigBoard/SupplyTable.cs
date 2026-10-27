@@ -61,17 +61,7 @@ public sealed class SupplyTable : TablePanel<FactoryPanel.SupplyRow>
             s.shortfall > 0 ? DataGrid.WarnRed : DataGrid.InkLight);
     }
 
-    TMPro.TextMeshProUGUI NameCell(GameObject parent, string goName, string value, Color color)
-    {
-        return DataGrid.AddNameCell(parent, goName, value, Widths,
-            PadL, PadR, Gap, 30, color, TMPro.HorizontalAlignmentOptions.Left);
-    }
-
-    TMPro.TextMeshProUGUI Fixed(GameObject parent, string goName, string value, int index, Color color)
-    {
-        return DataGrid.AddFixedCell(parent, goName, value, Widths, index,
-            PadR, Gap, 30, color, TMPro.HorizontalAlignmentOptions.Right);
-    }
+    // Row cells come from the TablePanel base (shared NameCell/Fixed).
 
     protected override string EmptyText
     {
