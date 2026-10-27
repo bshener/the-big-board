@@ -8,37 +8,45 @@ using static TheBigBoard.DataGrid;
 namespace TheBigBoard;
 
 /// <summary>FACTORY production-plan table: one row per product (merged lines)
-/// with LINES / PLAN TODAY / PLAN WEEK / STOCK (upstream, stores excluded) /
-/// SELL TODAY / SELL WEEK / PROD TODAY / PROD YDAY / PROD WEEK (manufactured
-/// in THIS factory via the ledger identity; "..." while unattributable) /
-/// TODAY +/- % / YDAY +/- % / WEEK +/- % (manufactured vs sold: over/under
-/// production, 0% = balanced, + = surplus, - = shortfall).
+/// with LINES / STOCK plus grouped TODAY / YESTERDAY / LAST WEEK windows,
+/// each holding PLAN / SELL / PROD / +/- % (manufactured vs sold: 0% =
+/// balanced, + = surplus, - = shortfall). STOCK is upstream on-hand (own
+/// factories + warehouses, stores excluded); PROD is manufactured in THIS
+/// factory via the ledger identity ("..." while unattributable).
 /// All headers sort.</summary>
 public sealed class PlanTable : TablePanel<FactoryPanel.ProductRow>
 {
-    static readonly string[] HeadNames = { "PRODUCT", "LINES", "PLAN TODAY", "PLAN WEEK", "STOCK", "SELL TODAY", "SELL WEEK", "PROD TODAY", "PROD YDAY", "PROD WEEK", "TODAY \u00B1%", "YDAY \u00B1%", "WEEK \u00B1%" };
+    static readonly string[] HeadNames = { "PRODUCT", "LINES", "STOCK",
+        "PLAN", "SELL", "PROD", "\u00B1%",
+        "PLAN", "SELL", "PROD", "\u00B1%",
+        "PLAN", "SELL", "PROD", "\u00B1%" };
 
     static readonly TMPro.HorizontalAlignmentOptions[] ColAlign =
     {
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
-        TMPro.HorizontalAlignmentOptions.Right,
+        TMPro.HorizontalAlignmentOptions.Right, // LINES
+        TMPro.HorizontalAlignmentOptions.Right, // STOCK
+        TMPro.HorizontalAlignmentOptions.Right, // T-PLAN
+        TMPro.HorizontalAlignmentOptions.Right, // T-SELL
+        TMPro.HorizontalAlignmentOptions.Right, // T-PROD
+        TMPro.HorizontalAlignmentOptions.Right, // T+/-%
+        TMPro.HorizontalAlignmentOptions.Right, // Y-PLAN
+        TMPro.HorizontalAlignmentOptions.Right, // Y-SELL
+        TMPro.HorizontalAlignmentOptions.Right, // Y-PROD
+        TMPro.HorizontalAlignmentOptions.Right, // Y+/-%
+        TMPro.HorizontalAlignmentOptions.Right, // W-PLAN
+        TMPro.HorizontalAlignmentOptions.Right, // W-SELL
+        TMPro.HorizontalAlignmentOptions.Right, // W-PROD
+        TMPro.HorizontalAlignmentOptions.Right, // W+/-%
     };
 
-    static readonly float[] DefaultWidths = { 130f, 220f, 220f, 160f, 160f, 160f, 160f, 160f, 160f, 120f, 120f, 120f }; // LINES, TODAY, WEEK, STOCK, SELL-T, SELL-W, PROD-T, PROD-Y, PROD-W, DIFF-T, DIFF-Y, DIFF-W
+    static readonly float[] DefaultWidths = { 100f, 150f,
+        140f, 140f, 140f, 120f, 140f, 140f, 140f, 120f, 140f, 140f, 140f, 120f };
 
     static readonly DataGrid.GroupDef[] GroupDefs =
     {
-        new DataGrid.GroupDef("PROD vs SELL", 9, 3),
+        new DataGrid.GroupDef("TODAY", 2, 4),
+        new DataGrid.GroupDef("YESTERDAY", 6, 4),
+        new DataGrid.GroupDef("LAST WEEK", 10, 4),
     };
 
     public PlanTable()
@@ -54,17 +62,19 @@ public sealed class PlanTable : TablePanel<FactoryPanel.ProductRow>
         {
             case 0: c = string.Compare(a.productName, b.productName, StringComparison.Ordinal); break;
             case 1: c = a.lines.CompareTo(b.lines); break;
-            case 2: c = a.today.CompareTo(b.today); break;
-            case 3: c = a.week.CompareTo(b.week); break;
-            case 4: c = a.stock.CompareTo(b.stock); break;
-            case 5: c = a.sellToday.CompareTo(b.sellToday); break;
-            case 6: c = a.sellWeek.CompareTo(b.sellWeek); break;
-            case 7: c = a.prodToday.CompareTo(b.prodToday); break;
-            case 8: c = a.prodYday.CompareTo(b.prodYday); break;
-            case 9: c = a.prodWeek.CompareTo(b.prodWeek); break;
-            case 10: c = DiffValue(a.prodToday, a.prodTodayExact, a.sellToday).CompareTo(DiffValue(b.prodToday, b.prodTodayExact, b.sellToday)); break;
-            case 11: c = DiffValue(a.prodYday, a.prodYdayExact, a.sellYday).CompareTo(DiffValue(b.prodYday, b.prodYdayExact, b.sellYday)); break;
-            case 12: c = DiffValue(a.prodWeek, a.prodWeekExact, a.sellWeek).CompareTo(DiffValue(b.prodWeek, b.prodWeekExact, b.sellWeek)); break;
+            case 2: c = a.stock.CompareTo(b.stock); break;
+            case 3: c = a.today.CompareTo(b.today); break;
+            case 4: c = a.sellToday.CompareTo(b.sellToday); break;
+            case 5: c = a.prodToday.CompareTo(b.prodToday); break;
+            case 6: c = DiffValue(a.prodToday, a.prodTodayExact, a.sellToday).CompareTo(DiffValue(b.prodToday, b.prodTodayExact, b.sellToday)); break;
+            case 7: c = a.planYday.CompareTo(b.planYday); break;
+            case 8: c = a.sellYday.CompareTo(b.sellYday); break;
+            case 9: c = a.prodYday.CompareTo(b.prodYday); break;
+            case 10: c = DiffValue(a.prodYday, a.prodYdayExact, a.sellYday).CompareTo(DiffValue(b.prodYday, b.prodYdayExact, b.sellYday)); break;
+            case 11: c = a.week.CompareTo(b.week); break;
+            case 12: c = a.sellWeek.CompareTo(b.sellWeek); break;
+            case 13: c = a.prodWeek.CompareTo(b.prodWeek); break;
+            case 14: c = DiffValue(a.prodWeek, a.prodWeekExact, a.sellWeek).CompareTo(DiffValue(b.prodWeek, b.prodWeekExact, b.sellWeek)); break;
         }
         if (c == 0) c = string.Compare(a.productName, b.productName, StringComparison.Ordinal);
         return c;
@@ -72,40 +82,47 @@ public sealed class PlanTable : TablePanel<FactoryPanel.ProductRow>
 
     protected override void RenderTotalRow(List<FactoryPanel.ProductRow> rows)
     {
-        long lines = 0, today = 0, week = 0, stock = 0, sellT = 0, sellY = 0, sellW = 0, prodT = 0, prodW = 0, prodY = 0;
+        long lines = 0, stock = 0;
+        long planT = 0, sellT = 0, prodT = 0;
+        long planY = 0, sellY = 0, prodY = 0;
+        long planW = 0, sellW = 0, prodW = 0;
         bool prodPartial = false;
         foreach (var p in rows)
         {
             lines += p.lines;
-            today += p.today;
-            week += p.week;
             stock += p.stock;
+            planT += p.today;
             sellT += p.sellToday;
+            planY += p.planYday;
             sellY += p.sellYday;
+            planW += p.week;
             sellW += p.sellWeek;
             if (p.prodTodayExact) prodT += p.prodToday;
             else prodPartial = true;
-            if (p.prodWeekExact) prodW += p.prodWeek;
-            else prodPartial = true;
             if (p.prodYdayExact) prodY += p.prodYday;
             else prodPartial = true;
+            if (p.prodWeekExact) prodW += p.prodWeek;
+            else prodPartial = true;
         }
+        bool totExact = !prodPartial;
+        string prodSuffix = prodPartial ? "+" : "";
         var rowGO = DataGrid.AddRowRoot(RowsRoot, "TotalRow", DataGrid.TotalBg);
         NameCell(rowGO, "TotalName", "TOTAL (" + rows.Count + " products)", DataGrid.ProfitGreen);
         Fixed(rowGO, "TotalLines", lines.ToString("N0"), 0, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalToday", today.ToString("N0"), 1, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalWeek", week.ToString("N0"), 2, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalStock", stock.ToString("N0"), 3, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalSellT", sellT.ToString("N0"), 4, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalSellW", sellW.ToString("N0"), 5, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalProdT", prodT.ToString("N0") + (prodPartial ? "+" : ""), 6, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalProdY", prodY.ToString("N0") + (prodPartial ? "+" : ""), 7, DataGrid.ProfitGreen);
-        Fixed(rowGO, "TotalProdW", prodW.ToString("N0") + (prodPartial ? "+" : ""), 8, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalStock", stock.ToString("N0"), 1, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalPlanT", planT.ToString("N0"), 2, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalSellT", sellT.ToString("N0"), 3, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalProdT", prodT.ToString("N0") + prodSuffix, 4, DataGrid.ProfitGreen);
         Color diffT, diffY, diffW;
-        bool totExact = !prodPartial;
-        Fixed(rowGO, "TotalDiffT", DiffText(prodT, totExact, sellT, out diffT), 9, diffT);
-        Fixed(rowGO, "TotalDiffY", DiffText(prodY, totExact, sellY, out diffY), 10, diffY);
-        Fixed(rowGO, "TotalDiffW", DiffText(prodW, totExact, sellW, out diffW), 11, diffW);
+        Fixed(rowGO, "TotalDiffT", DiffText(prodT, totExact, sellT, out diffT), 5, diffT);
+        Fixed(rowGO, "TotalPlanY", planY.ToString("N0"), 6, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalSellY", sellY.ToString("N0"), 7, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalProdY", prodY.ToString("N0") + prodSuffix, 8, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalDiffY", DiffText(prodY, totExact, sellY, out diffY), 9, diffY);
+        Fixed(rowGO, "TotalPlanW", planW.ToString("N0"), 10, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalSellW", sellW.ToString("N0"), 11, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalProdW", prodW.ToString("N0") + prodSuffix, 12, DataGrid.ProfitGreen);
+        Fixed(rowGO, "TotalDiffW", DiffText(prodW, totExact, sellW, out diffW), 13, diffW);
     }
 
     // Over/under production: (manufactured - sold) / sold. NaN = no verdict
@@ -139,27 +156,29 @@ public sealed class PlanTable : TablePanel<FactoryPanel.ProductRow>
     {
         NameCell(rowGO, "RowName", p.productName, DataGrid.InkLight);
         Fixed(rowGO, "RowLines", p.lines.ToString("N0"), 0, DataGrid.InkLight);
-        Fixed(rowGO, "RowToday", p.today.ToString("N0"), 1, DataGrid.InkLight);
-        Fixed(rowGO, "RowWeek", p.week.ToString("N0"), 2, DataGrid.InkLight);
-        Fixed(rowGO, "RowStock", p.stock.ToString("N0"), 3, DataGrid.InkLight);
-        Fixed(rowGO, "RowSellT", p.sellToday.ToString("N0"), 4, DataGrid.InkLight);
-        Fixed(rowGO, "RowSellW", p.sellWeek.ToString("N0"), 5, DataGrid.InkLight);
+        Fixed(rowGO, "RowStock", p.stock.ToString("N0"), 1, DataGrid.InkLight);
+        Fixed(rowGO, "RowPlanT", p.today.ToString("N0"), 2, DataGrid.InkLight);
+        Fixed(rowGO, "RowSellT", p.sellToday.ToString("N0"), 3, DataGrid.InkLight);
         if (p.prodTodayExact)
-            Fixed(rowGO, "RowProdT", p.prodToday.ToString("N0"), 6, DataGrid.InkLight);
+            Fixed(rowGO, "RowProdT", p.prodToday.ToString("N0"), 4, DataGrid.InkLight);
         else
-            Fixed(rowGO, "RowProdT", "...", 6, DataGrid.InkGrey);
-        if (p.prodYdayExact)
-            Fixed(rowGO, "RowProdY", p.prodYday.ToString("N0"), 7, DataGrid.InkLight);
-        else
-            Fixed(rowGO, "RowProdY", "...", 7, DataGrid.InkGrey);
-        if (p.prodWeekExact)
-            Fixed(rowGO, "RowProdW", p.prodWeek.ToString("N0"), 8, DataGrid.InkLight);
-        else
-            Fixed(rowGO, "RowProdW", "...", 8, DataGrid.InkGrey);
+            Fixed(rowGO, "RowProdT", "...", 4, DataGrid.InkGrey);
         Color diffT, diffY, diffW;
-        Fixed(rowGO, "RowDiffT", DiffText(p.prodToday, p.prodTodayExact, p.sellToday, out diffT), 9, diffT);
-        Fixed(rowGO, "RowDiffY", DiffText(p.prodYday, p.prodYdayExact, p.sellYday, out diffY), 10, diffY);
-        Fixed(rowGO, "RowDiffW", DiffText(p.prodWeek, p.prodWeekExact, p.sellWeek, out diffW), 11, diffW);
+        Fixed(rowGO, "RowDiffT", DiffText(p.prodToday, p.prodTodayExact, p.sellToday, out diffT), 5, diffT);
+        Fixed(rowGO, "RowPlanY", p.planYday.ToString("N0"), 6, DataGrid.InkLight);
+        Fixed(rowGO, "RowSellY", p.sellYday.ToString("N0"), 7, DataGrid.InkLight);
+        if (p.prodYdayExact)
+            Fixed(rowGO, "RowProdY", p.prodYday.ToString("N0"), 8, DataGrid.InkLight);
+        else
+            Fixed(rowGO, "RowProdY", "...", 8, DataGrid.InkGrey);
+        Fixed(rowGO, "RowDiffY", DiffText(p.prodYday, p.prodYdayExact, p.sellYday, out diffY), 9, diffY);
+        Fixed(rowGO, "RowPlanW", p.week.ToString("N0"), 10, DataGrid.InkLight);
+        Fixed(rowGO, "RowSellW", p.sellWeek.ToString("N0"), 11, DataGrid.InkLight);
+        if (p.prodWeekExact)
+            Fixed(rowGO, "RowProdW", p.prodWeek.ToString("N0"), 12, DataGrid.InkLight);
+        else
+            Fixed(rowGO, "RowProdW", "...", 12, DataGrid.InkGrey);
+        Fixed(rowGO, "RowDiffW", DiffText(p.prodWeek, p.prodWeekExact, p.sellWeek, out diffW), 13, diffW);
     }
 
     // Row cells come from the TablePanel base (shared NameCell/Fixed).

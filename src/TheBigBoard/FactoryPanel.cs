@@ -91,6 +91,7 @@ public static class FactoryPanel
         public string productItem; // recipe output item id, null when no recipe
         public string productName;
         public long today;
+        public long planYday; // template-weekday plan for yesterday (audit)
         public long week;
         public int hoursToday; // staffed hours counted in today (audit)
         public int hoursWeek; // staffed hours counted in week (audit)
@@ -103,6 +104,7 @@ public static class FactoryPanel
         public string productName;
         public int lines;
         public long today;
+        public long planYday; // staffed-schedule plan for yesterday (template weekday)
         public long week;
         public long stock; // upstream on-hand (own factories + warehouses, stores excluded)
         public long sellToday; // retail units sold today (orderHistory + live orders)
@@ -599,7 +601,7 @@ public static class FactoryPanel
                     if (p == null) continue;
                     _context.Logger.Info("The Big Board factory plan [" + _data.name + "]: "
                         + p.productName + " lines=" + p.lines
-                        + " planT=" + p.today + " planW=" + p.week
+                        + " planT=" + p.today + " planY=" + p.planYday + " planW=" + p.week
                         + " stock=" + p.stock + " sellT=" + p.sellToday + " sellY=" + p.sellYday + " sellW=" + p.sellWeek
                         + " prodT=" + (p.prodTodayExact ? p.prodToday.ToString("N0") : "...")
                         + " prodW=" + (p.prodWeekExact ? p.prodWeek.ToString("N0") : "...")
@@ -685,6 +687,7 @@ public static class FactoryPanel
 
         var materialNeed = new Dictionary<string, long>(StringComparer.Ordinal);
         var productToday = new Dictionary<string, long>(StringComparer.Ordinal);
+        var productPlanY = new Dictionary<string, long>(StringComparer.Ordinal);
         var productWeek = new Dictionary<string, long>(StringComparer.Ordinal);
         var productNames = new Dictionary<string, string>(StringComparer.Ordinal);
         var productLines = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -709,6 +712,7 @@ public static class FactoryPanel
                     line.productName = GetProductDisplayName(string.IsNullOrEmpty(created) ? outputItem : created);
                     int hT = 0, hW = 0, rT = 0, rW = 0;
                     line.today = PlanToday(ws, recipe, out hT, out rT);
+                    line.planYday = PlanYday(reg, ws, recipe);
                     line.week = PlanWeek(reg, ws, recipe, materialNeed, out hW, out rW);
                     line.hoursToday = hT;
                     line.hoursWeek = hW;
@@ -718,6 +722,7 @@ public static class FactoryPanel
                         if (_context != null && line.productItem != "__NORECIPE__")
                             _context.Logger.Info("The Big Board factory line [" + data.name + "]: "
                                 + line.productName + " hoursT=" + hT + " planT=" + line.today
+                                + " planY=" + line.planYday
                                 + " hoursW=" + hW + " planW=" + line.week + " maxRate=" + line.rate);
                     }
                     catch { }
@@ -732,6 +737,7 @@ public static class FactoryPanel
             data.totalToday += line.today;
             data.totalWeek += line.week;
             AddAmount(productToday, line.productItem, line.today);
+            AddAmount(productPlanY, line.productItem, line.planYday);
             AddAmount(productWeek, line.productItem, line.week);
             if (!productNames.ContainsKey(line.productItem))
                 productNames[line.productItem] = line.productName;
@@ -751,14 +757,16 @@ public static class FactoryPanel
         });
         foreach (var key in sortedKeys)
         {
-            long t;
+            long t, py;
             productToday.TryGetValue(key, out t);
+            productPlanY.TryGetValue(key, out py);
             data.products.Add(new ProductRow
             {
                 productItem = key,
                 productName = productNames.ContainsKey(key) ? productNames[key] : key,
                 lines = productLines.ContainsKey(key) ? productLines[key] : 0,
                 today = t,
+                planYday = py,
                 week = productWeek[key]
             });
         }
@@ -940,6 +948,53 @@ public static class FactoryPanel
             staffedHours += hours;
             if (scaled > maxRate) maxRate = scaled;
         }
+        return planned;
+    }
+
+    // Yesterday's plan from the same template-weekday logic as PlanWeek:
+    // shifts on yesterday's weekday for this workstation, current assignees.
+    // No material-need side effects (yesterday is already consumed).
+    static long PlanYday(BuildingRegistration reg, FactoryWorkstationInstance ws, Recipe recipe)
+    {
+        long planned = 0;
+        try
+        {
+            if (reg == null || reg.scheduleDays == null) return 0;
+            int todayDow = 1;
+            try { todayDow = (int)TimeHelper.GetDayOfWeek(); }
+            catch { return 0; }
+            int ydayDow = todayDow == 1 ? 7 : todayDow - 1;
+            string wsId = null;
+            try { wsId = ws.id; }
+            catch { return 0; }
+            foreach (var day in reg.scheduleDays)
+            {
+                if (day == null || !day.isOpen || day.workShifts == null) continue;
+                int d;
+                try { d = (int)day.day; }
+                catch { continue; }
+                if (d != ydayDow) continue;
+                foreach (var shift in day.workShifts)
+                {
+                    if (shift == null) continue;
+                    if (!string.Equals(shift.itemInstanceId, wsId, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (string.IsNullOrEmpty(shift.employeeId)) continue;
+                    int hours = 0;
+                    try { hours = Math.Max(0, shift.DurationInHours); }
+                    catch { continue; }
+                    if (hours <= 0) continue;
+                    Entities.EmployeeInstance emp = null;
+                    try { emp = Helpers.EmployeeHelper.GetEmployeeById(shift.employeeId, false); }
+                    catch { emp = null; }
+                    if (emp == null) continue;
+                    int scaled = 0;
+                    try { scaled = Math.Max(0, recipe.GetScaledOutputAmount(emp.GetSkillValue(SkillFactoryWorker))); }
+                    catch { continue; }
+                    planned += (long)hours * scaled;
+                }
+            }
+        }
+        catch { }
         return planned;
     }
 
