@@ -90,8 +90,8 @@ Files in `docs/screenshots/` (game UI in English, 1920px+, Day 449 save):
 6. `06-buildings-scale.png` — BUILDINGS census, 840 known (scale proof).
 7. `07-sales-search.png` — SALES tab, SEARCH sub-tab, cloth search, TODAY/YESTERDAY/LAST WEEK.
 8. `08-best-sellers.png` — SALES tab, BEST SELLERS sub-tab (default view), TODAY, ALL stores, context menu open (Day 449 save).
-9. PENDING (0.11.0, user captures): `09-transfer.png` — TRANSFER tab, per-source route with destination + product management visible.
-10. PENDING (0.11.0, user captures): `10-factory-plan.png` — FACTORY plan, TODAY/YESTERDAY/LAST WEEK grouped headers with PLAN/SELL/PROD.
+9. `09-transfer.png` — TRANSFER tab, brk-fac-cloth selected (11 lines, MIN STOCK top-up, MANAGING: ON). (0.11.0, Day 451 save.)
+10. `10-factory-plan.png` — FACTORY plan, brk-fac-cloth (TODAY/YESTERDAY/LAST WEEK groups, PLAN/SELL/PROD/±%, Storage 64% fill rate). (0.11.0, Day 451 save.)
 11. Optional later: GIF of typing a product name → results appearing.
 
 Rules for all shots: real mid/late-game save (not empty test save), game UI in English, 1920px+ wide, no debug overlays. Captions under each image on Workshop (one line each).
